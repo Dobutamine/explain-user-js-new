@@ -250,44 +250,66 @@ function refresh() {
                     @update:model-value="(v: string[]) => onMultiList(f, v)"
                   />
 
-                  <!-- function: render an input per arg, then a Call button -->
+                  <!-- function: arg input(s) with a compact inline apply button.
+                       The row's left label already names the function, so the
+                       button is icon-only to avoid repeating the caption. -->
                   <div
                     v-else-if="f.type === 'function'"
-                    class="flex flex-col items-end gap-1 w-44"
+                    class="flex items-center gap-1 w-44"
                   >
-                    <template v-for="a in f.args || []" :key="a.target">
-                      <InputNumber
-                        v-if="a.type === 'number'"
-                        :model-value="fnArgs[f.target]?.[a.target]"
-                        :min="a.ll"
-                        :max="a.ul"
-                        :step="a.delta || 1"
-                        :max-fraction-digits="a.rounding ?? 4"
-                        :placeholder="a.caption || a.target"
-                        size="small"
-                        class="w-full"
-                        @update:model-value="(v: number) => (fnArgs[f.target][a.target] = v)"
-                      />
-                      <ToggleSwitch
-                        v-else-if="a.type === 'boolean'"
-                        :model-value="fnArgs[f.target]?.[a.target]"
-                        @update:model-value="(v: boolean) => (fnArgs[f.target][a.target] = v)"
-                      />
-                      <Select
-                        v-else-if="a.type === 'list'"
-                        :model-value="fnArgs[f.target]?.[a.target]"
-                        :options="listOptions(a)"
-                        :placeholder="a.caption || a.target"
-                        class="w-full"
-                        @update:model-value="(v: string) => (fnArgs[f.target][a.target] = v)"
-                      />
-                    </template>
+                    <div class="flex flex-1 flex-col gap-1 min-w-0">
+                      <template v-for="a in f.args || []" :key="a.target">
+                        <!-- with multiple args, label each input so its meaning
+                             survives after the placeholder is replaced by a value -->
+                        <div class="flex flex-col gap-0.5">
+                          <span
+                            v-if="(f.args?.length ?? 0) > 1 && a.type !== 'boolean'"
+                            class="text-xs opacity-60 truncate"
+                          >
+                            {{ a.caption || a.target }}
+                          </span>
+                          <InputNumber
+                            v-if="a.type === 'number'"
+                            :model-value="fnArgs[f.target]?.[a.target]"
+                            :min="a.ll"
+                            :max="a.ul"
+                            :step="a.delta || 1"
+                            :max-fraction-digits="a.rounding ?? 4"
+                            :placeholder="a.caption || a.target"
+                            size="small"
+                            class="w-full"
+                            :input-class="'w-full'"
+                            @update:model-value="(v: number) => (fnArgs[f.target][a.target] = v)"
+                          />
+                          <div
+                            v-else-if="a.type === 'boolean'"
+                            class="flex items-center justify-between gap-2"
+                          >
+                            <span class="text-xs opacity-60">{{ a.caption || a.target }}</span>
+                            <ToggleSwitch
+                              :model-value="fnArgs[f.target]?.[a.target]"
+                              @update:model-value="(v: boolean) => (fnArgs[f.target][a.target] = v)"
+                            />
+                          </div>
+                          <Select
+                            v-else-if="a.type === 'list'"
+                            :model-value="fnArgs[f.target]?.[a.target]"
+                            :options="listOptions(a)"
+                            :placeholder="a.caption || a.target"
+                            size="small"
+                            class="w-full"
+                            @update:model-value="(v: string) => (fnArgs[f.target][a.target] = v)"
+                          />
+                        </div>
+                      </template>
+                    </div>
                     <Button
-                      :label="f.caption || f.target"
+                      v-tooltip.top="f.caption || f.target"
+                      :aria-label="f.caption || f.target"
+                      icon="pi pi-play"
                       :disabled="f.readonly"
                       size="small"
                       severity="secondary"
-                      class="w-full"
                       @click="callFunction(f)"
                     />
                   </div>

@@ -277,6 +277,24 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       ]
     },
     {
+      "caption": "set Haldane coefficient",
+      "edit_mode": "advanced",
+      "target": "set_haldane_coeff",
+      "type": "function",
+      "args": [
+        {
+          "caption": "Haldane coefficient (0 = off)",
+          "target": "new_coeff",
+          "type": "number",
+          "factor": 1,
+          "delta": 0.05,
+          "rounding": 2,
+          "ul": 5,
+          "ll": 0
+        }
+      ]
+    },
+    {
       "caption": "set total oxygen concentration (mmol/l)",
       "target": "set_to2",
       "edit_mode": "basic",
