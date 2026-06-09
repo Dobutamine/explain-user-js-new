@@ -4095,28 +4095,6 @@
           "BR_CAP": 0.3
         }
       },
-      "Kidneys": {
-        "name": "Kidneys",
-        "description": "Kidneys model",
-        "is_enabled": true,
-        "model_type": "Kidneys",
-        "components": {}
-      },
-      "HeadUpTilt": {
-        "name": "HeadUpTilt",
-        "description": "Head-up tilt test (gravity model)",
-        "is_enabled": true,
-        "model_type": "HeadUpTilt",
-        "components": {},
-        "is_active": false,
-        "tilt_angle": 0,
-        "body_density": 1.06,
-        "g": 980,
-        "upper_column_cm": 25,
-        "lower_column_cm": 50,
-        "upper_body_container": "UPPER_BODY",
-        "lower_body_container": "LOWER_BODY"
-      },
       "UPPER_BODY": {
         "name": "UPPER_BODY",
         "description": "passive container grouping cephalic vessels for tilt",
@@ -9399,6 +9377,22 @@
           { "name": "uv_flow", "model": "PL_FETAL_VEN_PL_UMB_VEN.flow" },
           { "name": "fo_ivci_flow", "model": "LA_RAIVCI.flow" },
           { "name": "fo_svc_flow", "model": "LA_RASVC.flow" }
+        ],
+        "minmax_targets": [
+          { "name": "lv", "model": "LV" },
+          { "name": "rv", "model": "RV" },
+          { "name": "abp_pre", "model": "AA" },
+          { "name": "abp", "model": "AD" },
+          { "name": "pap", "model": "PA" },
+          { "name": "cvp", "model": "RAIVCI" }
+        ],
+        "signal_targets": [
+          { "name": "ecg", "model": "Heart.ecg_signal" },
+          { "name": "sat_pre", "model": "AA.pres" },
+          { "name": "sat_post", "model": "AD.pres" },
+          { "name": "abp", "model": "AD.pres" },
+          { "name": "resp", "model": "THORAX.vol" },
+          { "name": "co2", "model": "Ventilator.co2" }
         ],
         "hr_avg_beats": 4,
         "flow_avg_beats": 1,
