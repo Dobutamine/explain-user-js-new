@@ -76,6 +76,16 @@ function syncLocal(name: string | null) {
       fnArgs[f.target] = buf;
       continue;
     }
+    if (f.type === "dict") {
+      // render the union of declared keys and any keys actually present, each value
+      // factor-scaled for display (no-op when factor = 1)
+      const cur = (m[f.target] ?? {}) as Record<string, any>;
+      const keys = Array.from(new Set([...(f.dict_keys ?? []), ...Object.keys(cur)]));
+      const out: Record<string, any> = {};
+      for (const k of keys) out[k] = toDisplay(f, cur[k] ?? 0);
+      local.value[f.target] = out;
+      continue;
+    }
     if (f.target in m) {
       local.value[f.target] =
         f.type === "number" || f.type === "factor"
@@ -114,6 +124,13 @@ function onPropList(f: InterfaceField) {
   // write both the model-name prop and the property-name prop
   if (f.target_model) setProp(path(f.target_model), local.value[f.target_model], 0);
   if (f.target_prop) setProp(path(f.target_prop), local.value[f.target_prop], 0);
+}
+function onDictValue(f: InterfaceField, key: string, v: number | null) {
+  if (v == null) return;
+  if (!local.value[f.target]) local.value[f.target] = {};
+  local.value[f.target][key] = v;
+  // nested 3-part path -> worker TaskScheduler writes model[prop1][prop2]
+  setProp(path(`${f.target}.${key}`), toRaw(f, v), 0);
 }
 
 // list options: literal choices override model-type options when custom_options
@@ -335,6 +352,32 @@ function refresh() {
                       class="w-full"
                       @update:model-value="(v: string) => { local[f.target_prop || ''] = v; onPropList(f); }"
                     />
+                  </div>
+
+                  <!-- dict: one number input per key (e.g. per-solute fractions) -->
+                  <div
+                    v-else-if="f.type === 'dict'"
+                    class="flex flex-col gap-1 w-44"
+                  >
+                    <div
+                      v-for="key in Object.keys(local[f.target] || {})"
+                      :key="key"
+                      class="flex items-center justify-between gap-2"
+                    >
+                      <span class="text-xs opacity-60 truncate">{{ key }}</span>
+                      <InputNumber
+                        :model-value="local[f.target][key]"
+                        :disabled="f.readonly"
+                        :min="f.ll"
+                        :max="f.ul"
+                        :step="f.delta || 0.001"
+                        :max-fraction-digits="f.rounding ?? 4"
+                        size="small"
+                        class="w-24"
+                        :input-class="'w-full'"
+                        @update:model-value="(v: number) => onDictValue(f, key, v)"
+                      />
+                    </div>
                   </div>
 
                   <!-- string / reference: read-only display -->

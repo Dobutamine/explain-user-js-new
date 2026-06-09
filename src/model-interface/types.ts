@@ -31,6 +31,9 @@ export interface InterfaceField {
   target_prop?: string;
   caption_model?: string;
   caption_prop?: string;
+  // dict controls (object keyed by name → value; one control per key)
+  dict_keys?: string[]; // keys to render (so an empty instance dict still shows all entries)
+  dict_value_type?: "number"; // value control kind (number is the only case for now)
 }
 
 // Ordered edit_mode buckets. `caption`/`all` fold into `basic` so the common
