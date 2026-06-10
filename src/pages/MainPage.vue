@@ -21,6 +21,7 @@ import SaveStatePanel from "@/components/controls/SaveStatePanel.vue";
 import NumericReadoutPanel from "@/components/numerics/NumericReadoutPanel.vue";
 import LoopChart from "@/components/host/LoopChart.vue";
 import Monitor from "@/components/host/Monitor.vue";
+import VentilatorScope from "@/components/host/VentilatorScope.vue";
 
 const store = useModelStore();
 const { scenarios, current } = storeToRefs(store);
@@ -30,7 +31,7 @@ const { model, status, modelReady, isRunning, error, load, start, stop, calculat
 const isolated = globalThis.crossOriginIsolated === true;
 const calcSecs = ref(10);
 const CALC_OPTIONS = [5, 10, 30, 60, 120, 300]; // seconds to calculate
-const vizTab = ref("diagram"); // active visualization tab: diagram | chart | loop | monitor
+const vizTab = ref("diagram"); // active visualization tab: diagram | chart | loop | monitor | ventilator
 const monitorTab = ref("monitoring"); // active right-column tab (more to come)
 const controlTab = ref("editor"); // active left-column tab (more to come)
 
@@ -174,6 +175,9 @@ function toggleRun() {
             <Tab value="monitor" v-tooltip.top="'Patient monitor'" aria-label="Patient monitor">
               <i class="pi pi-desktop"></i>
             </Tab>
+            <Tab value="ventilator" v-tooltip.top="'Ventilator graphs'" aria-label="Ventilator graphs">
+              <i class="pi pi-cloud"></i>
+            </Tab>
           </TabList>
           <TabPanels>
             <TabPanel value="diagram">
@@ -187,6 +191,9 @@ function toggleRun() {
             </TabPanel>
             <TabPanel value="monitor">
               <Monitor />
+            </TabPanel>
+            <TabPanel value="ventilator">
+              <VentilatorScope />
             </TabPanel>
           </TabPanels>
         </Tabs>
