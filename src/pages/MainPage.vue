@@ -32,7 +32,7 @@ const { model, status, modelReady, isRunning, error, load, start, stop, calculat
 const isolated = globalThis.crossOriginIsolated === true;
 const calcSecs = ref(10);
 const CALC_OPTIONS = [5, 10, 30, 60, 120, 300]; // seconds to calculate
-const vizTab = ref("diagram"); // active visualization tab: diagram | chart | loop | monitor | ventilator
+const vizTab = ref("diagram"); // active visualization tab: diagram | chart | loop | monitor | ventilator | chat
 const monitorTab = ref("monitoring"); // active right-column tab (more to come)
 const controlTab = ref("editor"); // active left-column tab (more to come)
 
@@ -178,6 +178,9 @@ function toggleRun() {
             <Tab value="ventilator" v-tooltip.top="'Ventilator graphs'" aria-label="Ventilator graphs">
               <i class="pi pi-cloud"></i>
             </Tab>
+            <Tab value="chat" v-tooltip.top="'Explain AI Bot'" aria-label="Explain AI Bot">
+              <i class="pi pi-comments"></i>
+            </Tab>
           </TabList>
           <TabPanels>
             <TabPanel value="diagram">
@@ -195,6 +198,9 @@ function toggleRun() {
             <TabPanel value="ventilator">
               <VentilatorScope />
             </TabPanel>
+            <TabPanel value="chat">
+              <ChatPanel />
+            </TabPanel>
           </TabPanels>
         </Tabs>
       </div>
@@ -203,9 +209,6 @@ function toggleRun() {
           <TabList>
             <Tab value="monitoring" v-tooltip.top="'Monitoring'" aria-label="Monitoring">
               <i class="pi pi-gauge"></i>
-            </Tab>
-            <Tab value="chat" v-tooltip.top="'Explain Labs chat'" aria-label="Explain Labs chat">
-              <i class="pi pi-comments"></i>
             </Tab>
           </TabList>
           <TabPanels>
@@ -219,9 +222,6 @@ function toggleRun() {
                   :collapsed="g.collapsed"
                 />
               </div>
-            </TabPanel>
-            <TabPanel value="chat">
-              <ChatPanel />
             </TabPanel>
           </TabPanels>
         </Tabs>
