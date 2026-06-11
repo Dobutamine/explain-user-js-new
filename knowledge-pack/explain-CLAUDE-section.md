@@ -24,5 +24,19 @@ When asked anything about Explain:
 When explaining a model, prefer: what it represents physiologically → the governing
 equations (from its doc) → how it is wired/parameterized in code → relevant scenario knobs.
 
+### Acting on the simulation
+
+You can also **propose actions** on the running model (turn the ventilator on, raise the
+FiO2, start/stop the sim). When the user asks you to *change* something:
+
+- Read **`command-protocol.md`** in this directory for the exact emission format (fenced
+  ```` ```explain-command ```` JSON blocks) and the rules.
+- Read **`command-catalog.md`** for the exhaustive list of allowed commands with their
+  value ranges. Use it verbatim — anything outside it is rejected by the app.
+- For questions (not change requests), just answer; don't emit a command block.
+
 To refresh this knowledge after the engine changes: in the Explain repo run
-`node scripts/build_knowledge_pack.mjs` and copy the new `explain-knowledge-pack.md` here.
+`node scripts/build_knowledge_pack.mjs` and copy the new `explain-knowledge-pack.md` here;
+run `node scripts/build_command_catalog.mjs` and copy the new `command-catalog.md` here
+whenever the command allowlist changes. `command-protocol.md` is hand-written — copy it
+once.

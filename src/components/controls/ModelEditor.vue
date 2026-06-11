@@ -133,9 +133,13 @@ function onDictValue(f: InterfaceField, key: string, v: number | null) {
   setProp(path(`${f.target}.${key}`), toRaw(f, v), 0);
 }
 
-// list options: literal choices override model-type options when custom_options
+// list options: literal choices override model-type options when custom_options.
+// Some fields carry both an empty `options: []` and a populated `choices` without
+// `custom_options` (e.g. Ventilator.vent_mode); a plain `??` chain wrongly stops
+// at the empty array, so pick the first NON-EMPTY of the candidates.
 function listOptions(f: InterfaceField): string[] {
-  return (f.custom_options ? f.choices : f.options) ?? f.choices ?? f.options ?? [];
+  const candidates = [f.custom_options ? f.choices : f.options, f.choices, f.options];
+  return candidates.find((c) => Array.isArray(c) && c.length > 0) ?? [];
 }
 // instances whose model_type is one of the field's allowed types
 function instancesOfTypes(types: string[] | undefined): string[] {

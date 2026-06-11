@@ -9,7 +9,9 @@ and letting it read them on demand.
 | File | What it is | How produced |
 |------|------------|--------------|
 | `explain-knowledge-pack.md` | The corpus: architecture + all `explain/docs/*.md` + engine source + UI/integration source + scenario format. ~200K tokens (full tier). | `node scripts/build_knowledge_pack.mjs` |
-| `explain-CLAUDE-section.md` | The `CLAUDE.md` pointer that orients an Agent-SDK bot to the pack (grep it, cite paths, handle the live patient-state block). | hand-written |
+| `explain-CLAUDE-section.md` | The `CLAUDE.md` pointer that orients an Agent-SDK bot to the pack (grep it, cite paths, handle the live patient-state block) and to the command files below. | hand-written |
+| `command-protocol.md` | **Bot-facing**: how to emit an action (the fenced `explain-command` JSON format + rules). The webapp parses these out of the reply and offers the user an Apply button. | hand-written |
+| `command-catalog.md` | **Bot-facing**: the exhaustive list of currently-allowed commands with value ranges. Generated from the webapp's allowlist + parameter schema so the bot can't propose something the app rejects. | `node scripts/build_command_catalog.mjs` |
 | `system-prompt.md` | A role/instruction preamble — only needed for the **fallback** (non-Agent-SDK) wiring below. | build script |
 | `README.md` | This guide. | hand-written |
 
@@ -42,13 +44,16 @@ So it already loads its working directory's `CLAUDE.md` and can `Read`/`Grep` fi
 **not** need to edit the bot's code or build a prompt-cache server. Just put the knowledge in
 the bot's working directory and point its `CLAUDE.md` at it:
 
-1. **Copy** `explain-knowledge-pack.md` into the bot's working directory — for this deploy,
+1. **Copy** `explain-knowledge-pack.md`, `command-protocol.md`, and `command-catalog.md`
+   into the bot's working directory — for this deploy,
    `/Users/lucy/claude-bots/explain/workdir/`.
 2. **Append** the contents of `explain-CLAUDE-section.md` to that directory's `CLAUDE.md`
-   (create it if absent).
+   (create it if absent). This pointer tells the bot about the pack *and* the two command
+   files.
 3. **Reload** by starting a fresh conversation ("new conversation" in the web app, or
-   `/reset` in Telegram) so the updated `CLAUDE.md` is read at session start. The pack file
-   is read on demand by the Read/Grep tool, so no process restart or rebuild is required.
+   `/reset` in Telegram) so the updated `CLAUDE.md` is read at session start. The pack and
+   command files are read on demand by the Read/Grep tool, so no process restart or rebuild
+   is required.
 
 The bot then greps `explain-knowledge-pack.md` for the relevant model/topic and answers
 grounded, citing exact paths (`explain/base_models/Resistor.js`, `explain/docs/Heart.md`).

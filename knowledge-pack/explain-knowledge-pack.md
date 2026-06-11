@@ -20316,20 +20316,42 @@ export function groupByEditMode(fields: InterfaceField[]): FieldGroup[] {
 
 ### FILE: src/stores/chat.ts
 
-```typescript
+````typescript
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { useExplain } from "@/composables/useExplain";
+import {
+  parseCommands,
+  validateCommand,
+  executeCommand,
+  type BotCommand,
+  type NormalizedCommand,
+} from "@/services/botCommands";
 
 // Chat with the "explain-labs_claude" bot (built specifically for this project).
 // Talks to the dev-server proxy at /api/chat (see vite.config.ts), which injects
 // the API key server-side. Each turn carries a compact snapshot of the current
 // simulated patient so the bot can answer about "this patient".
+//
+// The bot can also propose ACTIONS on the model by embedding fenced
+// ```explain-command``` JSON blocks in its reply. We parse + validate those here
+// (see services/botCommands.ts) and attach them to the assistant message as
+// PendingCommands; the user applies them with a click (confirm-before-apply).
+
+// A bot-proposed action attached to an assistant message.
+export interface PendingCommand {
+  cmd: BotCommand;
+  status: "pending" | "applied" | "dismissed" | "invalid";
+  description: string;
+  error?: string;
+  normalized?: NormalizedCommand;
+}
 
 export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   failed?: boolean;
+  commands?: PendingCommand[];
 }
 
 interface MonitorParam {
@@ -20431,7 +20453,7 @@ export const useChatStore = defineStore("chat", () => {
         );
       }
       conversationId.value = body.conversation_id ?? conversationId.value;
-      messages.value.push({ role: "assistant", text: body.answer });
+      pushAssistantReply(body.answer);
     } catch (e) {
       error.value = (e as Error).message;
       messages.value.push({
@@ -20444,16 +20466,237 @@ export const useChatStore = defineStore("chat", () => {
     }
   }
 
+  // Turn a raw bot reply into an assistant message: strip out any command
+  // blocks, validate each against the live model, and attach them as
+  // PendingCommands. The visible text is the prose with the blocks removed.
+  function pushAssistantReply(answer: string) {
+    const { modelState } = useExplain();
+    const { clean, commands, parseErrors } = parseCommands(answer);
+
+    const pending: PendingCommand[] = commands.map((cmd) => {
+      const v = validateCommand(cmd, modelState.value);
+      return {
+        cmd,
+        description: v.description,
+        normalized: v.normalized,
+        error: v.error,
+        status: v.ok ? ("pending" as const) : ("invalid" as const),
+      };
+    });
+
+    if (parseErrors.length) error.value = `bot sent a malformed command block (${parseErrors.length})`;
+
+    messages.value.push({
+      role: "assistant",
+      text: clean || (commands.length ? "" : answer),
+      commands: pending.length ? pending : undefined,
+    });
+  }
+
+  // Apply a single pending command to the live engine (confirm-before-apply).
+  function applyCommand(messageIndex: number, cmdIndex: number) {
+    const pc = messages.value[messageIndex]?.commands?.[cmdIndex];
+    if (!pc || pc.status !== "pending" || !pc.normalized) return;
+    const explain = useExplain();
+    try {
+      executeCommand(pc.normalized, explain);
+      pc.status = "applied";
+    } catch (e) {
+      pc.status = "invalid";
+      pc.error = (e as Error).message;
+    }
+  }
+
+  function dismissCommand(messageIndex: number, cmdIndex: number) {
+    const pc = messages.value[messageIndex]?.commands?.[cmdIndex];
+    if (pc && pc.status === "pending") pc.status = "dismissed";
+  }
+
+  function applyAll(messageIndex: number) {
+    const cmds = messages.value[messageIndex]?.commands ?? [];
+    cmds.forEach((_, i) => applyCommand(messageIndex, i));
+  }
+
+  // Dev-only: inject a canned bot reply to exercise the parse/validate/apply
+  // pipeline without the bot reachable. Remove once the bot contract is live.
+  function __devInjectReply(answer: string) {
+    pushAssistantReply(answer);
+  }
+
   function newConversation() {
     messages.value = [];
     conversationId.value = null;
     error.value = null;
   }
 
-  return { messages, isLoading, error, conversationId, sendMessage, newConversation };
+  return {
+    messages,
+    isLoading,
+    error,
+    conversationId,
+    sendMessage,
+    newConversation,
+    applyCommand,
+    dismissCommand,
+    applyAll,
+    __devInjectReply,
+  };
 });
 
+````
+
+
+### Acting on the simulation (command protocol)
+
+### FILE: knowledge-pack/command-protocol.md
+
+`````markdown
+# Explain — command protocol (bot-facing)
+
+You can do more than explain the model: you can **propose actions on the running
+simulation**. The Explain web app parses actions out of your reply, validates them,
+and shows the user an **Apply / Dismiss** button for each. Nothing changes the patient
+until the user clicks Apply — so propose freely, but propose correctly.
+
+This file says **how** to emit an action. The companion `command-catalog.md` lists
+**what** you may emit (the exact models, properties, functions, and value ranges).
+Treat the catalog as exhaustive: anything not in it is rejected by the app.
+
+## How to emit a command
+
+Put each action in its own fenced code block tagged `explain-command`, containing a
+single JSON object. You may include several blocks in one reply. Keep your normal
+prose too — explain what you're doing and why; the blocks are stripped from the text
+the user reads and rendered as action cards instead.
+
+````
+Sure — I'll start mechanical ventilation and set a rate of 40.
+
+```explain-command
+{"op":"call","model":"Ventilator","target":"switch_ventilator","args":[true],"reason":"start ventilation"}
 ```
+
+```explain-command
+{"op":"setProp","model":"Ventilator","target":"vent_rate","value":40,"reason":"set rate to 40/min"}
+```
+````
+
+## The envelope
+
+One JSON object per block. Fields by `op`:
+
+| `op` | required fields | meaning |
+|------|-----------------|---------|
+| `call` | `model`, `target`, `args` (array) | invoke a model function (e.g. `switch_ventilator`) |
+| `setProp` | `model`, `target`, `value` | set a model property (e.g. `vent_rate`) |
+| `start` | — | start the realtime simulation loop |
+| `stop` | — | stop the realtime simulation loop |
+
+`reason` is optional on every command — a short human label shown on the action card
+(e.g. `"raise PEEP to recruit lung"`). Always include it; it's what the user sees.
+
+## Rules
+
+- **Only emit a command when the user actually asks to change something** ("turn on
+  the ventilator", "raise the FiO2", "start the sim"). For questions ("why is the
+  saturation low?") just answer — no command block.
+- **Use the catalog verbatim.** Exact `model`, `target`, and argument names from
+  `command-catalog.md`. Do not invent models, properties, functions, or extra args.
+- **Values are in the displayed clinical unit** shown in the catalog (e.g. FiO2 as a
+  fraction `0.4`, rate in `/min`, pressures in `cmH2O`). Stay within the stated range —
+  out-of-range values are rejected.
+- **One action per block.** Multiple blocks are fine and applied independently.
+- **Don't fabricate results.** You're proposing, not executing. Say what the command
+  *will* do; the next turn's live patient-state block will show whether it took effect.
+- If the user asks for something not in the catalog, say it isn't available yet rather
+  than emitting a command that will be rejected.
+
+## When you're a fallback (non-Agent-SDK) bot
+
+If you receive this file as part of a system prompt rather than reading it from a
+working directory, the same rules apply — emit the `explain-command` blocks inline in
+your reply exactly as above.
+
+`````
+
+### FILE: knowledge-pack/command-catalog.md
+
+````markdown
+# Explain — command catalog (bot-facing)
+
+This is the **exhaustive** list of model actions you may currently propose. It is
+generated from the webapp's allowlist + parameter schema, so anything NOT listed here
+will be **rejected** by the app — do not invent commands, models, properties, or
+arguments outside this catalog.
+
+See `command-protocol.md` for HOW to emit a command (the fenced-block format and the
+rules on when to do so). This file is just the vocabulary.
+
+Values are in the **clinical/display unit shown** for each field (the app converts to
+engine-internal units itself). Stay within the stated range.
+
+**Enabled commands: 7.** Snapshot — regenerate with
+`node scripts/build_command_catalog.mjs` after the allowlist changes.
+
+---
+### `call` Ventilator.switch_ventilator() — switch ventilator on/off
+
+- arguments (in order):
+  - `is_enabled` — state (type boolean)
+
+```json
+{"op":"call","model":"Ventilator","target":"switch_ventilator","args":[true],"reason":"turn mechanical ventilation on/off (arg: boolean)"}
+```
+
+### `call` Ventilator.set_fio2() — fio2
+
+- arguments (in order):
+  - `fio2` — new fio2 (type number, range min 0.21, max 1)
+
+```json
+{"op":"call","model":"Ventilator","target":"set_fio2","args":[0.21],"reason":"set inspired O2 fraction (arg: 0.21–1.0)"}
+```
+
+### `setProp` Ventilator.vent_rate — ventilator rate (/min)
+
+- type: number · unit: /min · range: min 0, max 100
+- `value` is in the unit shown above (the same number a clinician reads in the UI).
+
+```json
+{"op":"setProp","model":"Ventilator","target":"vent_rate","value":0,"reason":"ventilator rate (/min)"}
+```
+
+### `setProp` Ventilator.pip_cmh2o — peak inspiratory pressure (cmH2O)
+
+- type: number · unit: cmH2O · range: min 5, max 50
+- `value` is in the unit shown above (the same number a clinician reads in the UI).
+
+```json
+{"op":"setProp","model":"Ventilator","target":"pip_cmh2o","value":5,"reason":"peak inspiratory pressure (cmH2O)"}
+```
+
+### `setProp` Ventilator.peep_cmh2o — positive end expiratory pressure (cmH2O)
+
+- type: number · unit: cmH2O · range: min 0, max 20
+- `value` is in the unit shown above (the same number a clinician reads in the UI).
+
+```json
+{"op":"setProp","model":"Ventilator","target":"peep_cmh2o","value":0,"reason":"positive end-expiratory pressure (cmH2O)"}
+```
+
+### `start` — start the realtime simulation loop
+
+```json
+{"op":"start","reason":"start the realtime simulation loop"}
+```
+
+### `stop` — stop the realtime simulation loop
+
+```json
+{"op":"stop","reason":"stop the realtime simulation loop"}
+```
+
+````
 
 
 ## 6. Scenario format

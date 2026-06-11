@@ -4,6 +4,7 @@ import MarkdownIt from "markdown-it";
 import Panel from "primevue/panel";
 import Button from "primevue/button";
 import Textarea from "primevue/textarea";
+import ToggleSwitch from "primevue/toggleswitch";
 import { useChatStore } from "@/stores/chat";
 
 // Chat with the "explain-labs_claude" bot (built specifically for this project).
@@ -27,8 +28,15 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
 
 const renderMd = (text: string): string => md.render(text);
 
+import type { ChatMessage } from "@/stores/chat";
+
 const chat = useChatStore();
 const input = ref("");
+
+// show "Apply all" only when a message has 2+ still-applicable commands
+function hasMultiplePending(m: ChatMessage): boolean {
+  return (m.commands?.filter((c) => c.status === "pending").length ?? 0) > 1;
+}
 const scrollEnd = ref<HTMLDivElement | null>(null);
 
 async function send() {
@@ -61,15 +69,24 @@ watch(
     <template #header>
       <div class="flex items-center justify-between w-full">
         <span class="font-semibold">Explain AI Bot</span>
-        <Button
-          v-tooltip.top="'New conversation'"
-          icon="pi pi-plus"
-          text
-          rounded
-          size="small"
-          aria-label="New conversation"
-          @click="chat.newConversation()"
-        />
+        <div class="flex items-center gap-2">
+          <label
+            v-tooltip.top="'When on, bot commands run immediately without an Apply click'"
+            class="flex items-center gap-1 text-xs opacity-80 cursor-pointer"
+          >
+            <ToggleSwitch v-model="chat.autoApply" />
+            <span :class="chat.autoApply ? 'text-amber-400' : ''">Auto-apply</span>
+          </label>
+          <Button
+            v-tooltip.top="'New conversation'"
+            icon="pi pi-plus"
+            text
+            rounded
+            size="small"
+            aria-label="New conversation"
+            @click="chat.newConversation()"
+          />
+        </div>
       </div>
     </template>
 
@@ -93,11 +110,68 @@ watch(
         >
           <!-- assistant replies are markdown; user input + error bubbles stay verbatim -->
           <div
-            v-if="m.role === 'assistant' && !m.failed"
+            v-if="m.role === 'assistant' && !m.failed && m.text"
             class="md-body"
             v-html="renderMd(m.text)"
           ></div>
-          <span v-else class="whitespace-pre-wrap">{{ m.text }}</span>
+          <span v-else-if="m.role !== 'assistant' || m.failed" class="whitespace-pre-wrap">{{
+            m.text
+          }}</span>
+
+          <!-- bot-proposed actions: confirm-before-apply -->
+          <div v-if="m.commands?.length" class="mt-2 flex flex-col gap-1.5">
+            <div
+              v-for="(pc, ci) in m.commands"
+              :key="ci"
+              class="rounded border border-surface-600 bg-surface-900/60 px-2 py-1.5 text-xs"
+            >
+              <div class="flex items-center gap-1.5">
+                <i class="pi pi-bolt text-[10px] opacity-70"></i>
+                <span class="font-mono break-all flex-1">{{ pc.description }}</span>
+                <span
+                  v-if="pc.status === 'applied'"
+                  class="text-green-400 whitespace-nowrap"
+                  ><i class="pi pi-check text-[10px]"></i> applied</span
+                >
+                <span
+                  v-else-if="pc.status === 'dismissed'"
+                  class="opacity-50 whitespace-nowrap"
+                  >dismissed</span
+                >
+                <span
+                  v-else-if="pc.status === 'invalid'"
+                  class="text-amber-400 whitespace-nowrap"
+                  >can't apply</span
+                >
+              </div>
+              <p v-if="pc.error" class="text-amber-400/80 mt-0.5 leading-tight">{{ pc.error }}</p>
+              <div v-if="pc.status === 'pending'" class="mt-1 flex gap-1.5">
+                <Button
+                  label="Apply"
+                  icon="pi pi-check"
+                  size="small"
+                  class="!py-0.5 !text-xs"
+                  @click="chat.applyCommand(i, ci)"
+                />
+                <Button
+                  label="Dismiss"
+                  icon="pi pi-times"
+                  size="small"
+                  text
+                  class="!py-0.5 !text-xs"
+                  @click="chat.dismissCommand(i, ci)"
+                />
+              </div>
+            </div>
+            <Button
+              v-if="hasMultiplePending(m)"
+              label="Apply all"
+              size="small"
+              text
+              class="self-start !py-0.5 !text-xs"
+              @click="chat.applyAll(i)"
+            />
+          </div>
         </div>
         <div v-if="chat.isLoading" class="self-start text-xs opacity-60 px-2 py-1">
           <i class="pi pi-spin pi-spinner mr-1"></i> thinking…

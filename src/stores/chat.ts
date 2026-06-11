@@ -1,16 +1,38 @@
 import { defineStore } from "pinia";
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { useExplain } from "@/composables/useExplain";
+import {
+  parseCommands,
+  validateCommand,
+  executeCommand,
+  type BotCommand,
+  type NormalizedCommand,
+} from "@/services/botCommands";
 
 // Chat with the "explain-labs_claude" bot (built specifically for this project).
 // Talks to the dev-server proxy at /api/chat (see vite.config.ts), which injects
 // the API key server-side. Each turn carries a compact snapshot of the current
 // simulated patient so the bot can answer about "this patient".
+//
+// The bot can also propose ACTIONS on the model by embedding fenced
+// ```explain-command``` JSON blocks in its reply. We parse + validate those here
+// (see services/botCommands.ts) and attach them to the assistant message as
+// PendingCommands; the user applies them with a click (confirm-before-apply).
+
+// A bot-proposed action attached to an assistant message.
+export interface PendingCommand {
+  cmd: BotCommand;
+  status: "pending" | "applied" | "dismissed" | "invalid";
+  description: string;
+  error?: string;
+  normalized?: NormalizedCommand;
+}
 
 export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   failed?: boolean;
+  commands?: PendingCommand[];
 }
 
 interface MonitorParam {
@@ -27,6 +49,14 @@ export const useChatStore = defineStore("chat", () => {
   const isLoading = ref(false);
   const error = ref<string | null>(null);
   const conversationId = ref<string | null>(null);
+  // Audit of actions the user applied from the bot's suggestions, echoed back
+  // into the next context block so the bot knows its proposals took effect.
+  const appliedLog = ref<{ description: string; ts: number }[]>([]);
+
+  // When on, valid bot commands execute the moment the reply arrives (no click).
+  // Off by default (confirm-before-apply); persisted so a trusted session sticks.
+  const autoApply = ref(localStorage.getItem("explain.chat.autoApply") === "1");
+  watch(autoApply, (v) => localStorage.setItem("explain.chat.autoApply", v ? "1" : "0"));
 
   // Pull the same monitor groups the right-column panel shows, format the latest
   // slow-stream sample exactly like NumericReadoutPanel, and return a plain-text
@@ -81,7 +111,25 @@ export const useChatStore = defineStore("chat", () => {
       if (rows.length) lines.push(`${m.title ?? key}: ${rows.join(", ")}`);
     }
 
+    // Tell the bot which of its proposed actions the user has actually applied
+    // (most recent first), so it can reason about cause/effect across turns.
+    const recent = appliedLog.value.slice(-8).reverse();
+    if (recent.length) {
+      const now = Date.now();
+      lines.push("Applied from your suggestions:");
+      for (const a of recent) lines.push(`- ${a.description} (${ago(now - a.ts)} ago)`);
+    }
+
     return lines.join("\n");
+  }
+
+  // compact relative-time label: 12s / 3m / 1h
+  function ago(ms: number): string {
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return `${s}s`;
+    const m = Math.round(s / 60);
+    if (m < 60) return `${m}m`;
+    return `${Math.round(m / 60)}h`;
   }
 
   async function sendMessage(text: string) {
@@ -112,7 +160,7 @@ export const useChatStore = defineStore("chat", () => {
         );
       }
       conversationId.value = body.conversation_id ?? conversationId.value;
-      messages.value.push({ role: "assistant", text: body.answer });
+      pushAssistantReply(body.answer);
     } catch (e) {
       error.value = (e as Error).message;
       messages.value.push({
@@ -125,11 +173,79 @@ export const useChatStore = defineStore("chat", () => {
     }
   }
 
+  // Turn a raw bot reply into an assistant message: strip out any command
+  // blocks, validate each against the live model, and attach them as
+  // PendingCommands. The visible text is the prose with the blocks removed.
+  function pushAssistantReply(answer: string) {
+    const { modelState } = useExplain();
+    const { clean, commands, parseErrors } = parseCommands(answer);
+
+    const pending: PendingCommand[] = commands.map((cmd) => {
+      const v = validateCommand(cmd, modelState.value);
+      return {
+        cmd,
+        description: v.description,
+        normalized: v.normalized,
+        error: v.error,
+        status: v.ok ? ("pending" as const) : ("invalid" as const),
+      };
+    });
+
+    if (parseErrors.length) error.value = `bot sent a malformed command block (${parseErrors.length})`;
+
+    messages.value.push({
+      role: "assistant",
+      text: clean || (commands.length ? "" : answer),
+      commands: pending.length ? pending : undefined,
+    });
+
+    // Auto-apply mode: run every valid command immediately (invalid ones are
+    // skipped by applyCommand and stay visible with their reason).
+    if (autoApply.value && pending.length) applyAll(messages.value.length - 1);
+  }
+
+  // Apply a single pending command to the live engine (confirm-before-apply).
+  function applyCommand(messageIndex: number, cmdIndex: number) {
+    const pc = messages.value[messageIndex]?.commands?.[cmdIndex];
+    if (!pc || pc.status !== "pending" || !pc.normalized) return;
+    const explain = useExplain();
+    try {
+      executeCommand(pc.normalized, explain);
+      pc.status = "applied";
+      appliedLog.value.push({ description: pc.description, ts: Date.now() });
+    } catch (e) {
+      pc.status = "invalid";
+      pc.error = (e as Error).message;
+    }
+  }
+
+  function dismissCommand(messageIndex: number, cmdIndex: number) {
+    const pc = messages.value[messageIndex]?.commands?.[cmdIndex];
+    if (pc && pc.status === "pending") pc.status = "dismissed";
+  }
+
+  function applyAll(messageIndex: number) {
+    const cmds = messages.value[messageIndex]?.commands ?? [];
+    cmds.forEach((_, i) => applyCommand(messageIndex, i));
+  }
+
   function newConversation() {
     messages.value = [];
     conversationId.value = null;
     error.value = null;
+    appliedLog.value = [];
   }
 
-  return { messages, isLoading, error, conversationId, sendMessage, newConversation };
+  return {
+    messages,
+    isLoading,
+    error,
+    conversationId,
+    autoApply,
+    sendMessage,
+    newConversation,
+    applyCommand,
+    dismissCommand,
+    applyAll,
+  };
 });
