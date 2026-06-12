@@ -1,4 +1,4 @@
-import { Application, Assets, Sprite, Graphics, Text } from "pixi.js";
+import { Application, Assets, Sprite, Graphics, Text, Texture } from "pixi.js";
 import { animMagOffset, animTintOffset } from "@explain/helpers/RealtimeChannels";
 import type {
   AnimFrame,
@@ -100,11 +100,21 @@ export class DiagramRenderer implements RendererAdapter {
   // editor state (Phase E)
   private editMode = false;
   private selected: string | null = null;
+  private selectedKind: "comp" | "conn" | null = null;
   private selectionG: Graphics | null = null;
   private dragging: string | null = null;
   private dragOffsetX = 0;
   private dragOffsetY = 0;
-  private onSelectCb: ((name: string | null, comp: any) => void) | null = null;
+  private dragStartX = 0; // pointer pos at press, to tell a click from a drag
+  private dragStartY = 0;
+  private dragMoved = false;
+  private wasSelected = false; // was the pressed component already selected?
+  private onSelectCb:
+    | ((name: string | null, comp: any, kind: "comp" | "conn" | null) => void)
+    | null = null;
+  // fired after a structural edit that changes the animation binding
+  // (add/connect/delete/models) so the host can push the diagram to the worker.
+  private onChangeCb: (() => void) | null = null;
   private connectMode = false;
   private connectFrom: string | null = null;
 
@@ -279,19 +289,7 @@ export class DiagramRenderer implements RendererAdapter {
     // offsets from the sprite centre; size is the font size in px.
     let label: Text | null = null;
     if (comp.label) {
-      const l = layout.label || {};
-      label = new Text({
-        text: String(comp.label),
-        style: {
-          fontFamily: "Arial, Helvetica, sans-serif",
-          fontSize: (numberOr(l.size, 10) || 10) * this.scaling,
-          fill: l.color || "#ffffff",
-          align: "center",
-        },
-      });
-      label.anchor.set(0.5, 0.5);
-      label.eventMode = "none";
-      label.zIndex = layout.general.z_index + 2; // above sprite and arrow
+      label = this.buildLabelText(comp, layout);
       this.app!.stage.addChild(label);
     }
 
@@ -316,6 +314,74 @@ export class DiagramRenderer implements RendererAdapter {
     t.x = node.sprite.x + numberOr(l.pos_x, 0) * this.scaling;
     t.y = node.sprite.y + numberOr(l.pos_y, 0) * this.scaling;
     t.rotation = numberOr(l.rotation, 0);
+  }
+
+  /** Build the caption Text for a component from its current label layout. */
+  private buildLabelText(comp: any, layout: any): Text {
+    const l = layout.label || {};
+    const t = new Text({
+      text: String(comp.label),
+      style: {
+        fontFamily: "Arial, Helvetica, sans-serif",
+        fontSize: (numberOr(l.size, 10) || 10) * this.scaling,
+        fill: l.color || "#ffffff",
+        align: "center",
+      },
+    });
+    t.anchor.set(0.5, 0.5);
+    t.eventMode = "none";
+    t.zIndex = layout.general.z_index + 2; // above sprite and arrow
+    return t;
+  }
+
+  /** Set a component's caption text live, creating/removing the Text as needed. */
+  setLabel(name: string, text: string) {
+    const comp = this.diagram?.components?.[name];
+    const node = this.comps[name];
+    if (!comp || !node) return;
+    comp.label = text;
+    if (!text) {
+      if (node.label) {
+        this.app?.stage.removeChild(node.label);
+        node.label = null;
+      }
+      return;
+    }
+    if (node.label) {
+      node.label.text = text;
+    } else {
+      node.label = this.buildLabelText(comp, node.layout);
+      this.app?.stage.addChild(node.label);
+    }
+    this.positionLabel(node);
+  }
+
+  /** Set which engine model(s) a component/connector represents. Affects the
+   *  exported definition and the next engine build (the live anim binding is
+   *  fixed at build time), not the current frame stream. */
+  setModels(name: string, models: string[]) {
+    const comp = this.diagram?.components?.[name];
+    if (!comp) return;
+    comp.models = [...models];
+    this.onChangeCb?.();
+  }
+
+  /** Toggle oxygenation tinting for a component/connector. Affects both the live
+   *  sprite tint and the animation binding (tint source), so it re-binds. */
+  setTinting(name: string, on: boolean) {
+    this.applyLayoutPatch(name, { general: { tinting: on } });
+    this.onChangeCb?.();
+  }
+
+  /** Swap a component's sprite image (picto) live. */
+  async setPicto(name: string, picto: string) {
+    const comp = this.diagram?.components?.[name];
+    const node = this.comps[name];
+    if (!comp || !node || !picto) return;
+    const path = picto.includes("gfx/") ? picto : "gfx/" + picto;
+    comp.picto = picto.replace("gfx/", "");
+    await Assets.load(path);
+    node.sprite.texture = Texture.from(path);
   }
 
   private placeAt(layout: any): { x: number; y: number } {
@@ -350,6 +416,10 @@ export class DiagramRenderer implements RendererAdapter {
     g.zIndex = comp.layout.general.z_index;
     g.alpha = comp.layout.general.alpha;
     const geom = this.drawPath(g, comp.layout, from, to);
+    // make the path selectable in the editor (hit area set in drawPath)
+    g.eventMode = "static";
+    g.cursor = "pointer";
+    g.on("pointerdown", (e: any) => this.onConnDown(name, e));
     this.app!.stage.addChildAt(g, 0); // paths under sprites
 
     const arrow = Sprite.from("gfx/arrow.png");
@@ -402,7 +472,21 @@ export class DiagramRenderer implements RendererAdapter {
     }
     // fixed neutral grey backbone; never recoloured per frame
     g.stroke({ width, color: CONNECTOR_COLOR, alpha: 1 });
+    // hit area: a fat polyline along the path so the thin stroke is easy to
+    // click in the editor (stroke-only Graphics aren't hit-tested by default).
+    g.hitArea = new PolylineHitArea(samplePath(geom), Math.max(width, 12));
     return geom;
+  }
+
+  private onConnDown(name: string, e: any) {
+    if (!this.editMode || this.connectMode) return;
+    e.stopPropagation?.();
+    // clicking the already-selected connector toggles the selection off
+    if (this.selected === name && this.selectedKind === "conn") {
+      this.clearSelection();
+    } else {
+      this.select(name, "conn");
+    }
   }
 
   // ---- RendererAdapter ----
@@ -503,15 +587,19 @@ export class DiagramRenderer implements RendererAdapter {
   setEditMode(on: boolean) {
     this.editMode = on;
     if (!on) {
-      this.selected = null;
       this.dragging = null;
-      this.drawSelection();
-      this.onSelectCb?.(null, null);
+      this.clearSelection();
     }
   }
 
-  setSelectCallback(fn: (name: string | null, comp: any) => void) {
+  setSelectCallback(fn: (name: string | null, comp: any, kind: "comp" | "conn" | null) => void) {
     this.onSelectCb = fn;
+  }
+
+  /** Notified after a structural edit (add/connect/delete/setModels) so the
+   *  host can re-bind the live animation by pushing the diagram to the engine. */
+  setChangeCallback(fn: () => void) {
+    this.onChangeCb = fn;
   }
 
   /** Return the (mutated) diagram definition for serialization/export. */
@@ -519,11 +607,25 @@ export class DiagramRenderer implements RendererAdapter {
     return this.diagram;
   }
 
-  /** Apply a layout patch to a component and re-render it live. */
+  /** Apply a layout patch to a component or connector and re-render it live. */
   applyLayoutPatch(name: string, patch: any) {
     const comp = this.diagram?.components?.[name];
     if (!comp) return;
     deepMerge(comp.layout, patch);
+    // connectors have no sprite: update the path graphics + arrow instead
+    const conn = this.conns.find((c) => c.name === name);
+    if (conn) {
+      const l = conn.layout;
+      conn.graphics.alpha = l.general.alpha;
+      conn.graphics.zIndex = l.general.z_index;
+      conn.arrow.zIndex = l.general.z_index + 1;
+      if (!l.general.tinting) conn.arrow.tint = 0xffffff;
+      const f = this.comps[conn.from];
+      const t = this.comps[conn.to];
+      if (f && t) conn.geom = this.drawPath(conn.graphics, l, f, t);
+      this.drawSelection();
+      return;
+    }
     const node = this.comps[name];
     if (node) {
       const l = node.layout;
@@ -564,7 +666,13 @@ export class DiagramRenderer implements RendererAdapter {
       return;
     }
     const node = this.comps[name];
+    // remember whether this component was already selected, so a plain click
+    // (no drag) on it toggles the selection off in onDragEnd.
+    this.wasSelected = this.selected === name && this.selectedKind === "comp";
     this.dragging = name;
+    this.dragMoved = false;
+    this.dragStartX = e.global.x;
+    this.dragStartY = e.global.y;
     this.dragOffsetX = node.sprite.x - e.global.x;
     this.dragOffsetY = node.sprite.y - e.global.y;
     this.select(name);
@@ -572,6 +680,10 @@ export class DiagramRenderer implements RendererAdapter {
 
   private onDragMove(e: any) {
     if (!this.dragging) return;
+    // ignore sub-pixel jitter so a click isn't mistaken for a drag
+    if (Math.hypot(e.global.x - this.dragStartX, e.global.y - this.dragStartY) > 3) {
+      this.dragMoved = true;
+    }
     const node = this.comps[this.dragging];
     node.sprite.x = this.snap(e.global.x + this.dragOffsetX);
     node.sprite.y = this.snap(e.global.y + this.dragOffsetY);
@@ -585,6 +697,12 @@ export class DiagramRenderer implements RendererAdapter {
   private onDragEnd() {
     if (!this.dragging) return;
     const name = this.dragging;
+    // a plain click (no drag) on an already-selected component deselects it
+    if (this.wasSelected && !this.dragMoved) {
+      this.dragging = null;
+      this.clearSelection();
+      return;
+    }
     const node = this.comps[name];
     const cx = this.xCenter + this.xOffset;
     const cy = this.yCenter + this.yOffset;
@@ -611,13 +729,23 @@ export class DiagramRenderer implements RendererAdapter {
     this.rerouteConnectors(name);
     this.drawSelection();
     this.dragging = null;
-    this.onSelectCb?.(name, this.diagram.components[name]);
+    this.onSelectCb?.(name, this.diagram.components[name], "comp");
   }
 
-  private select(name: string) {
+  private select(name: string, kind: "comp" | "conn" = "comp") {
     this.selected = name;
+    this.selectedKind = kind;
     this.drawSelection();
-    this.onSelectCb?.(name, this.diagram.components[name]);
+    this.onSelectCb?.(name, this.diagram.components[name], kind);
+  }
+
+  /** Clear the current selection (used by Escape / leaving edit mode). */
+  clearSelection() {
+    this.selected = null;
+    this.selectedKind = null;
+    this.connectFrom = null;
+    this.drawSelection();
+    this.onSelectCb?.(null, null, null);
   }
 
   /** Delete the selected component (sprite + attached connectors) and its
@@ -625,6 +753,18 @@ export class DiagramRenderer implements RendererAdapter {
   deleteSelected() {
     const name = this.selected;
     if (!name || !this.app) return;
+    if (this.selectedKind === "conn") {
+      this.conns = this.conns.filter((c) => {
+        if (c.name !== name) return true;
+        this.app!.stage.removeChild(c.graphics);
+        this.app!.stage.removeChild(c.arrow);
+        return false;
+      });
+      if (this.diagram?.components) delete this.diagram.components[name];
+      this.clearSelection();
+      this.onChangeCb?.();
+      return;
+    }
     const node = this.comps[name];
     if (node) {
       this.app.stage.removeChild(node.sprite);
@@ -640,9 +780,8 @@ export class DiagramRenderer implements RendererAdapter {
       return true;
     });
     if (this.diagram?.components) delete this.diagram.components[name];
-    this.selected = null;
-    this.drawSelection();
-    this.onSelectCb?.(null, null);
+    this.clearSelection();
+    this.onChangeCb?.();
   }
 
   private drawSelection() {
@@ -656,6 +795,22 @@ export class DiagramRenderer implements RendererAdapter {
     const g = this.selectionG;
     g.clear();
     if (!this.selected) return;
+    if (this.selectedKind === "conn") {
+      const conn = this.conns.find((c) => c.name === this.selected);
+      if (!conn?.geom) return;
+      // trace the path with a translucent cyan highlight under the backbone
+      const geom = conn.geom;
+      if (geom.type === "straight") {
+        g.moveTo(geom.x1, geom.y1).lineTo(geom.x2, geom.y2);
+      } else {
+        const pts = samplePath(geom);
+        g.moveTo(pts[0], pts[1]);
+        for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]);
+      }
+      const w = numberOr(Number(conn.layout.path.width), 5) * this.scaling;
+      g.stroke({ width: w + 6, color: 0x22d3ee, alpha: 0.5 });
+      return;
+    }
     const node = this.comps[this.selected];
     if (!node) return;
     const b = node.sprite.getBounds();
@@ -670,14 +825,15 @@ export class DiagramRenderer implements RendererAdapter {
   /** Add a new compartment bound to a model, placed at center. Note: newly added
    *  components are static until the engine is rebuilt with the exported diagram
    *  (the anim registry is fixed at model-build time). */
-  async addCompartment(modelName: string) {
+  async addCompartment(modelName: string, picto?: string) {
     if (!this.app || !this.diagram?.components) return null;
     const name = this.uniqueName(modelName || "NEW");
-    const comp = defaultCompartment(modelName);
+    const comp = defaultCompartment(modelName, picto);
     this.diagram.components[name] = comp;
     await Assets.load(["gfx/" + comp.picto]);
     this.makeCompartment(name, comp);
-    this.select(name);
+    this.select(name, "comp");
+    this.onChangeCb?.();
     return name;
   }
 
@@ -687,7 +843,8 @@ export class DiagramRenderer implements RendererAdapter {
     const comp = defaultConnector(fromName, toName);
     this.diagram.components[name] = comp;
     this.makeConnector(name, comp);
-    this.select(toName);
+    this.select(name, "conn");
+    this.onChangeCb?.();
   }
 
   private uniqueName(base: string): string {
@@ -728,11 +885,11 @@ function wrap01(v: number): number {
   return ((v % 1) + 1) % 1;
 }
 
-function defaultCompartment(modelName: string) {
+function defaultCompartment(modelName: string, picto?: string) {
   return {
     type: "Compartment",
     label: modelName || "",
-    picto: "container.png",
+    picto: (picto || "container.png").replace("gfx/", ""),
     enabled: true,
     models: modelName ? [modelName] : [],
     dbcFrom: "",
@@ -823,4 +980,50 @@ function circleCenterThrough(x1: number, y1: number, x2: number, y2: number, r: 
 
 function angleOnCircle(cx: number, cy: number, x: number, y: number): number {
   return Math.atan2(y - cy, x - cx);
+}
+
+// Sample a connector path geometry into a flat [x0,y0,x1,y1,...] point list.
+// Straight paths are 2 points; arcs are tessellated into ~24 segments.
+function samplePath(geom: any): number[] {
+  if (!geom) return [];
+  if (geom.type === "straight") return [geom.x1, geom.y1, geom.x2, geom.y2];
+  const steps = 24;
+  const pts: number[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const a = geom.from + (geom.to - geom.from) * (i / steps);
+    pts.push(geom.cx + geom.r * Math.cos(a), geom.cy + geom.r * Math.sin(a));
+  }
+  return pts;
+}
+
+// A Pixi-compatible hit area (anything with contains(x,y)) that tests whether a
+// point lies within `tol` px of a polyline — used to make thin connector
+// strokes comfortably clickable in the editor.
+class PolylineHitArea {
+  private pts: number[];
+  private tol: number;
+  constructor(pts: number[], tol: number) {
+    this.pts = pts;
+    this.tol = tol;
+  }
+  contains(x: number, y: number): boolean {
+    const t2 = this.tol * this.tol;
+    for (let i = 0; i + 3 < this.pts.length; i += 2) {
+      if (distToSeg2(x, y, this.pts[i], this.pts[i + 1], this.pts[i + 2], this.pts[i + 3]) <= t2)
+        return true;
+    }
+    return false;
+  }
+}
+
+// squared distance from point (px,py) to segment (ax,ay)-(bx,by)
+function distToSeg2(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy || 1e-9;
+  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const cx = ax + t * dx;
+  const cy = ay + t * dy;
+  return (px - cx) ** 2 + (py - cy) ** 2;
 }

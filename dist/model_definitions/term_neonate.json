@@ -3667,6 +3667,81 @@
    }
   },
   "monitors": {
+   "vitals": {
+    "title": "Vitals",
+    "enabled": true,
+    "collapsed": false,
+    "parameters": [
+      {
+      "label": "HR",
+      "unit": "bpm",
+      "factor": 1,
+      "rounding": 0,
+      "props": [
+       "Monitor.heart_rate"
+      ],
+      "weight_based": false,
+      "value": "115"
+     },
+          {
+      "label": "SaO2(pre)",
+      "unit": "%",
+      "factor": 1,
+      "rounding": 0,
+      "props": [
+       "Monitor.sao2_pre"
+      ],
+      "weight_based": false,
+      "value": "95"
+     },
+     {
+      "label": "SaO2(post)",
+      "unit": "%",
+      "factor": 1,
+      "rounding": 0,
+      "props": [
+       "Monitor.sao2_post"
+      ],
+      "weight_based": false,
+      "value": "95"
+     },
+     {
+      "label": "Abp",
+      "unit": "mmHg",
+      "factor": 1,
+      "rounding": 0,
+      "props": [
+       "Monitor.minmax.abp_pres_max",
+       "Monitor.minmax.abp_pres_min"
+      ],
+      "weight_based": false,
+      "value": "75/48"
+     },
+     {
+      "label": "RR",
+      "unit": "bpm",
+      "factor": 1,
+      "rounding": 0,
+      "props": [
+       "Monitor.resp_rate"
+      ],
+      "weight_based": false,
+      "value": "45"
+     },
+     {
+      "label": "EtCO2",
+      "unit": "mmHg",
+      "factor": 1,
+      "rounding": 0,
+      "props": [
+       "Monitor.etco2"
+      ],
+      "weight_based": false,
+      "value": "0"
+     }
+
+    ]
+   },
    "add_vitals": {
     "title": "Additional Vitals",
     "enabled": true,
@@ -3835,6 +3910,17 @@
     "enabled": true,
     "collapsed": true,
     "parameters": [
+    {
+      "label": "Diurese",
+      "unit": "ml/kg/h",
+      "factor": 60,
+      "rounding": 1,
+      "props": [
+       "Kidneys.urine_flow"
+      ],
+      "weight_based": true,
+      "value": "0.0"
+     },
      {
       "label": "LVO",
       "unit": "ml/kg/min",
@@ -4466,6 +4552,17 @@
  },
  "model_definition": {
   "models": {
+   "Drugs": {
+    "name": "Drugs",
+    "description": "pharmacology (PK/PD) controller — Milestone 1: adrenaline → heart rate",
+    "is_enabled": true,
+    "model_type": "Drugs",
+    "components": {},
+    "drugs_running": true,
+    "injection_site": "IVCI",
+    "effect_site": "AA",
+    "heart_name": "Heart"
+   },
    "Heart": {
     "name": "Heart",
     "description": "heart contraction model",

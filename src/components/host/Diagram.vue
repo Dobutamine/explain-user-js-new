@@ -3,8 +3,11 @@ import { onMounted, onBeforeUnmount, ref, computed } from "vue";
 import ToggleButton from "primevue/togglebutton";
 import ColorPicker from "primevue/colorpicker";
 import InputNumber from "primevue/inputnumber";
+import InputText from "primevue/inputtext";
+import Checkbox from "primevue/checkbox";
 import Button from "primevue/button";
 import Select from "primevue/select";
+import MultiSelect from "primevue/multiselect";
 import { useRealtimeBus } from "@/composables/useRealtimeBus";
 import { useExplain } from "@/composables/useExplain";
 // type-only import is erased at build; the renderer (and PixiJS) is loaded
@@ -22,13 +25,40 @@ const connectMode = ref(false);
 const gridOn = ref(false);
 const gridSize = ref(20);
 const addModel = ref<string | null>(null);
+const addPicto = ref("container.png");
 const selectedName = ref<string | null>(null);
+const selectedKind = ref<"comp" | "conn" | null>(null);
 const selColor = ref("ffffff");
 const selAlpha = ref(1);
 const selZ = ref(0);
 const selScaleX = ref(1);
 const selScaleY = ref(1);
 const selRotation = ref(0);
+const selTinting = ref(true);
+const selPicto = ref("container.png");
+const selLabel = ref("");
+const selLabelSize = ref(10);
+const selLabelColor = ref("ffffff");
+const selLabelPosX = ref(0);
+const selLabelPosY = ref(0);
+const selPathType = ref("straight");
+const selPathWidth = ref(5);
+const selModels = ref<string[]>([]);
+
+// sprite images available in public/gfx (arrow.png is the flow indicator, not a picto)
+const PICTOS = [
+  "container.png",
+  "vessel.png",
+  "lung.png",
+  "pump.png",
+  "blood.png",
+  "exchanger.png",
+  "gas_container.png",
+  "general.png",
+  "placenta.png",
+  "trachea.png",
+];
+const PATH_TYPES = ["straight", "arc", "arc_r"];
 
 const modelNames = computed(() => {
   const m = (modelState.value as any)?.models;
@@ -40,17 +70,36 @@ async function mountRenderer(diagram: any) {
   const { DiagramRenderer } = await import("@/render/DiagramRenderer");
   adapter = new DiagramRenderer(el.value, diagram);
   await adapter.init();
-  adapter.setSelectCallback((name, comp) => {
+  adapter.setSelectCallback((name, comp, kind) => {
     selectedName.value = name;
-    if (comp) {
-      selColor.value = String(comp.layout.sprite.color || "#ffffff").replace("#", "");
-      selAlpha.value = comp.layout.general.alpha ?? 1;
-      selZ.value = comp.layout.general.z_index ?? 0;
-      selScaleX.value = comp.layout.sprite.scale.x ?? 1;
-      selScaleY.value = comp.layout.sprite.scale.y ?? 1;
-      selRotation.value = comp.layout.sprite.rotation ?? 0;
+    selectedKind.value = kind;
+    if (!comp) return;
+    const g = comp.layout.general;
+    selAlpha.value = g.alpha ?? 1;
+    selZ.value = g.z_index ?? 0;
+    selTinting.value = g.tinting ?? false;
+    selModels.value = Array.isArray(comp.models) ? [...comp.models] : [];
+    if (kind === "conn") {
+      selPathType.value = comp.layout.path?.type ?? "straight";
+      selPathWidth.value = Number(comp.layout.path?.width) || 5;
+    } else {
+      const s = comp.layout.sprite;
+      selColor.value = String(s.color || "#ffffff").replace("#", "");
+      selScaleX.value = s.scale.x ?? 1;
+      selScaleY.value = s.scale.y ?? 1;
+      selRotation.value = s.rotation ?? 0;
+      selPicto.value = comp.picto || "container.png";
+      const l = comp.layout.label || {};
+      selLabel.value = comp.label ?? "";
+      selLabelSize.value = l.size ?? 10;
+      selLabelColor.value = String(l.color || "#ffffff").replace("#", "");
+      selLabelPosX.value = l.pos_x ?? 0;
+      selLabelPosY.value = l.pos_y ?? 0;
     }
   });
+  // structural edits (add/connect/delete/models/tinting) re-bind the live
+  // animation by pushing the edited diagram to the engine — no model rebuild.
+  adapter.setChangeCallback(() => pushDiagram());
   if (editMode.value) adapter.setEditMode(true);
   // reflect the diagram's own grid settings in the toolbar
   gridOn.value = diagram?.settings?.grid === true;
@@ -66,8 +115,31 @@ function teardown() {
   }
 }
 
-onMounted(() => mountRenderer((model as any).loadedFileData?.diagram_definition));
-onBeforeUnmount(teardown);
+// Keyboard shortcuts (edit mode only): Delete/Backspace removes the selection,
+// Escape clears it. Ignored while typing in a form field.
+function onKeydown(e: KeyboardEvent) {
+  if (!editMode.value || !adapter) return;
+  const t = e.target as HTMLElement | null;
+  const tag = t?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+  if ((e.key === "Delete" || e.key === "Backspace") && selectedName.value) {
+    e.preventDefault();
+    deleteSelected();
+  } else if (e.key === "Escape") {
+    adapter.clearSelection();
+    selectedName.value = null;
+    selectedKind.value = null;
+  }
+}
+
+onMounted(() => {
+  mountRenderer((model as any).loadedFileData?.diagram_definition);
+  window.addEventListener("keydown", onKeydown);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKeydown);
+  teardown();
+});
 
 function toggleEdit(on: boolean) {
   adapter?.setEditMode(on);
@@ -78,9 +150,27 @@ function patch(p: any) {
 function deleteSelected() {
   adapter?.deleteSelected();
   selectedName.value = null;
+  selectedKind.value = null;
 }
 async function addCompartment() {
-  if (adapter && addModel.value) await adapter.addCompartment(addModel.value);
+  if (adapter && addModel.value) await adapter.addCompartment(addModel.value, addPicto.value);
+}
+function setLabelText() {
+  if (adapter && selectedName.value) adapter.setLabel(selectedName.value, selLabel.value);
+}
+async function setPicto() {
+  if (adapter && selectedName.value) await adapter.setPicto(selectedName.value, selPicto.value);
+}
+function setModels() {
+  if (adapter && selectedName.value) adapter.setModels(selectedName.value, selModels.value);
+}
+function setTinting() {
+  if (adapter && selectedName.value) adapter.setTinting(selectedName.value, selTinting.value);
+}
+// Push the edited diagram to the engine so the sprite animation re-binds live
+// (new/changed components animate without rebuilding the running model).
+function pushDiagram() {
+  if (adapter) (model as any).updateDiagram?.(adapter.getDiagram());
 }
 function toggleConnect(on: boolean) {
   adapter?.setConnectMode(on);
@@ -140,24 +230,17 @@ function download(text: string, name: string) {
           severity="danger"
           @click="deleteSelected"
         />
-        <Button label="Export JSON" size="small" severity="secondary" @click="exportJson" />
-        <Button label="Import JSON" size="small" severity="secondary" @click="fileInput?.click()" />
-        <input
-          ref="fileInput"
-          type="file"
-          accept="application/json"
-          class="hidden"
-          @change="onImport"
-        />
-        <span class="mx-1 opacity-40">|</span>
-        <Select
-          v-model="addModel"
-          :options="modelNames"
-          filter
-          placeholder="model"
-          class="w-40"
-        />
-        <Button label="Add" size="small" :disabled="!addModel" @click="addCompartment" />
+        <template v-if="!selectedName">
+          <Button label="Add" size="small" :disabled="!addModel" @click="addCompartment" />
+          <Select v-model="addPicto" :options="PICTOS" class="addsel w-32" />
+          <Select
+            v-model="addModel"
+            :options="modelNames"
+            filter
+            placeholder="model"
+            class="addsel w-40"
+          />
+        </template>
         <ToggleButton
           v-model="connectMode"
           on-label="Connecting"
@@ -165,45 +248,29 @@ function download(text: string, name: string) {
           size="small"
           @update:model-value="toggleConnect"
         />
-        <span class="mx-1 opacity-40">|</span>
-        <ToggleButton
-          v-model="gridOn"
-          on-label="Grid on"
-          off-label="Grid"
-          size="small"
-          @update:model-value="toggleGrid"
-        />
-        <InputNumber
-          v-if="gridOn"
-          v-model="gridSize"
-          :step="5"
-          :min="2"
-          suffix=" px"
-          size="small"
-          class="w-24"
-          @update:model-value="changeGridSize"
-        />
       </template>
     </div>
 
     <div
       v-if="editMode && selectedName"
-      class="flex items-center gap-3 flex-wrap text-sm border border-surface-700 rounded p-2"
+      class="inspector flex items-center gap-x-2 gap-y-1 flex-wrap border border-surface-700 rounded px-2 py-1"
     >
-      <label
-        v-tooltip.top="'Sprite colour — the fixed tint used when oxygenation tinting is off'"
-        class="flex items-center gap-1"
-      >
-        color
-        <ColorPicker
-          v-model="selColor"
-          @update:model-value="patch({ sprite: { color: '#' + selColor } })"
+      <!-- common to compartments and connectors -->
+      <label v-tooltip.top="'Engine model(s) this component represents (drives its volume/flow animation after the next build)'">
+        models
+        <MultiSelect
+          v-model="selModels"
+          :options="modelNames"
+          filter
+          display="chip"
+          placeholder="none"
+          :max-selected-labels="3"
+          class="w-56"
+          @update:model-value="setModels"
         />
       </label>
-      <label
-        v-tooltip.top="'Opacity — 0 is fully transparent, 1 is fully opaque'"
-        class="flex items-center gap-1"
-      >
+      <span class="opacity-30">|</span>
+      <label v-tooltip.top="'Opacity — 0 is fully transparent, 1 is fully opaque'">
         alpha
         <InputNumber
           v-model="selAlpha"
@@ -212,65 +279,140 @@ function download(text: string, name: string) {
           :max="1"
           :max-fraction-digits="2"
           size="small"
-          class="w-20"
+          class="w-12"
           @update:model-value="patch({ general: { alpha: selAlpha } })"
         />
       </label>
-      <label
-        v-tooltip.top="'Z-index — stacking order; higher values are drawn on top of lower ones'"
-        class="flex items-center gap-1"
-      >
+      <label v-tooltip.top="'Z-index — stacking order; higher values are drawn on top'">
         z
         <InputNumber
           v-model="selZ"
           :step="1"
           size="small"
-          class="w-16"
+          class="w-10"
           @update:model-value="patch({ general: { z_index: selZ } })"
         />
       </label>
-      <label
-        v-tooltip.top="'Horizontal size multiplier of the sprite (1 = native width)'"
-        class="flex items-center gap-1"
-      >
-        scale x
-        <InputNumber
-          v-model="selScaleX"
-          :step="0.1"
-          :max-fraction-digits="2"
-          size="small"
-          class="w-20"
-          @update:model-value="patch({ sprite: { scale: { x: selScaleX, y: selScaleY } } })"
-        />
+      <label v-tooltip.top="'Tint by oxygenation (to2). When off, the fixed sprite colour is used.'">
+        <Checkbox v-model="selTinting" binary @update:model-value="setTinting" />
+        O₂
       </label>
-      <label
-        v-tooltip.top="'Vertical size multiplier of the sprite (1 = native height)'"
-        class="flex items-center gap-1"
-      >
-        scale y
-        <InputNumber
-          v-model="selScaleY"
-          :step="0.1"
-          :max-fraction-digits="2"
-          size="small"
-          class="w-20"
-          @update:model-value="patch({ sprite: { scale: { x: selScaleX, y: selScaleY } } })"
-        />
-      </label>
-      <label
-        v-tooltip.top="'Rotation of the sprite, in radians'"
-        class="flex items-center gap-1"
-      >
-        rot
-        <InputNumber
-          v-model="selRotation"
-          :step="0.1"
-          :max-fraction-digits="2"
-          size="small"
-          class="w-20"
-          @update:model-value="patch({ sprite: { rotation: selRotation } })"
-        />
-      </label>
+
+      <!-- compartment-only controls -->
+      <template v-if="selectedKind === 'comp'">
+        <span class="opacity-30">|</span>
+        <label v-tooltip.top="'Sprite colour — the fixed tint used when oxygenation tinting is off'">
+          col
+          <ColorPicker
+            v-model="selColor"
+            @update:model-value="patch({ sprite: { color: '#' + selColor } })"
+          />
+        </label>
+        <label v-tooltip.top="'Sprite image'">
+          picto
+          <Select v-model="selPicto" :options="PICTOS" class="w-24" @update:model-value="setPicto" />
+        </label>
+        <label v-tooltip.top="'Horizontal size multiplier of the sprite (1 = native width)'">
+          sx
+          <InputNumber
+            v-model="selScaleX"
+            :step="0.1"
+            :max-fraction-digits="2"
+            size="small"
+            class="w-12"
+            @update:model-value="patch({ sprite: { scale: { x: selScaleX, y: selScaleY } } })"
+          />
+        </label>
+        <label v-tooltip.top="'Vertical size multiplier of the sprite (1 = native height)'">
+          sy
+          <InputNumber
+            v-model="selScaleY"
+            :step="0.1"
+            :max-fraction-digits="2"
+            size="small"
+            class="w-12"
+            @update:model-value="patch({ sprite: { scale: { x: selScaleX, y: selScaleY } } })"
+          />
+        </label>
+        <label v-tooltip.top="'Rotation of the sprite, in radians'">
+          rot
+          <InputNumber
+            v-model="selRotation"
+            :step="0.1"
+            :max-fraction-digits="2"
+            size="small"
+            class="w-12"
+            @update:model-value="patch({ sprite: { rotation: selRotation } })"
+          />
+        </label>
+        <span class="opacity-30">|</span>
+        <label v-tooltip.top="'Caption text shown on the compartment'">
+          lbl
+          <InputText v-model="selLabel" size="small" class="w-24" @update:model-value="setLabelText" />
+        </label>
+        <label v-tooltip.top="'Caption font size, in px'">
+          sz
+          <InputNumber
+            v-model="selLabelSize"
+            :step="1"
+            :min="1"
+            size="small"
+            class="w-10"
+            @update:model-value="patch({ label: { size: selLabelSize } })"
+          />
+        </label>
+        <label v-tooltip.top="'Caption colour'">
+          <ColorPicker
+            v-model="selLabelColor"
+            @update:model-value="patch({ label: { color: '#' + selLabelColor } })"
+          />
+        </label>
+        <label v-tooltip.top="'Caption horizontal offset from the sprite centre, in px'">
+          lx
+          <InputNumber
+            v-model="selLabelPosX"
+            :step="1"
+            size="small"
+            class="w-10"
+            @update:model-value="patch({ label: { pos_x: selLabelPosX } })"
+          />
+        </label>
+        <label v-tooltip.top="'Caption vertical offset from the sprite centre, in px'">
+          ly
+          <InputNumber
+            v-model="selLabelPosY"
+            :step="1"
+            size="small"
+            class="w-10"
+            @update:model-value="patch({ label: { pos_y: selLabelPosY } })"
+          />
+        </label>
+      </template>
+
+      <!-- connector-only controls -->
+      <template v-if="selectedKind === 'conn'">
+        <span class="opacity-30">|</span>
+        <label v-tooltip.top="'Path shape between the two endpoints'">
+          path
+          <Select
+            v-model="selPathType"
+            :options="PATH_TYPES"
+            class="w-24"
+            @update:model-value="patch({ path: { type: selPathType } })"
+          />
+        </label>
+        <label v-tooltip.top="'Stroke width of the path, in px'">
+          width
+          <InputNumber
+            v-model="selPathWidth"
+            :step="1"
+            :min="1"
+            size="small"
+            class="w-12"
+            @update:model-value="patch({ path: { width: selPathWidth } })"
+          />
+        </label>
+      </template>
     </div>
 
     <div
@@ -278,5 +420,84 @@ function download(text: string, name: string) {
       class="diagram"
       style="width: 100%; height: 65vh; min-height: 480px; position: relative"
     ></div>
+
+    <div v-if="editMode" class="flex items-center gap-2 flex-wrap">
+      <Button label="Export JSON" size="small" severity="secondary" @click="exportJson" />
+      <Button label="Import JSON" size="small" severity="secondary" @click="fileInput?.click()" />
+      <input
+        ref="fileInput"
+        type="file"
+        accept="application/json"
+        class="hidden"
+        @change="onImport"
+      />
+      <span class="mx-1 opacity-40">|</span>
+      <ToggleButton
+        v-model="gridOn"
+        on-label="Grid on"
+        off-label="Grid"
+        size="small"
+        @update:model-value="toggleGrid"
+      />
+      <InputNumber
+        v-if="gridOn"
+        v-model="gridSize"
+        :step="5"
+        :min="2"
+        suffix=" px"
+        size="small"
+        class="gridsize w-16"
+        @update:model-value="changeGridSize"
+      />
+    </div>
   </div>
 </template>
+
+<style scoped>
+/* Compact inspector: force PrimeVue controls to fill their (narrow) wrappers
+   instead of their default intrinsic width, and shrink padding/font. */
+.inspector {
+  font-size: 11px;
+}
+.inspector label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+/* Let the Tailwind w-* class on each control's root govern its width; only the
+   INNER input fills that width. (Setting width on the root here would override
+   the utility class via specificity and blow the fields back out to full size.) */
+.inspector :deep(.p-inputtext),
+.inspector :deep(.p-inputnumber-input),
+.inspector :deep(.p-select-label),
+.inspector :deep(.p-multiselect-label) {
+  width: 100%;
+  min-width: 0;
+  font-size: 11px;
+  padding: 2px 6px;
+  min-height: 0;
+}
+.inspector :deep(.p-select-dropdown) {
+  width: 1.5rem;
+}
+.inspector :deep(.p-colorpicker-preview) {
+  width: 20px;
+  height: 20px;
+}
+.inspector :deep(.p-checkbox) {
+  width: 18px;
+  height: 18px;
+}
+/* grid-size field (outside the inspector): make the inner input fill the
+   narrow wrapper instead of its default intrinsic width. */
+.gridsize :deep(.p-inputtext) {
+  width: 100%;
+}
+/* add-component type/model selectors: smaller font in the visible box. */
+.addsel :deep(.p-select-label) {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+</style>
