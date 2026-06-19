@@ -3306,6 +3306,92 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": false
     },
     {
+      "caption": "contractions running (labor)",
+      "target": "contractions_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "contraction period (s)",
+      "target": "contraction_period",
+      "type": "number",
+      "delta": 5,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 30,
+      "ul": 600,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "contraction duration (s)",
+      "target": "contraction_duration",
+      "type": "number",
+      "delta": 5,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 20,
+      "ul": 180,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "contraction amplitude (mmHg)",
+      "target": "contraction_amplitude",
+      "type": "number",
+      "delta": 5,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 120,
+      "build_prop": true,
+      "edit_mode": "extra",
+      "readonly": false
+    },
+    {
+      "caption": "resting tone (mmHg)",
+      "target": "resting_tone",
+      "type": "number",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0,
+      "ll": 0,
+      "ul": 30,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "contraction pressure gain (0-1)",
+      "target": "contraction_pres_gain",
+      "type": "number",
+      "delta": 0.05,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
+      "caption": "contraction resistance peak (x)",
+      "target": "contraction_r_peak",
+      "type": "number",
+      "delta": 0.5,
+      "factor": 1,
+      "rounding": 1,
+      "ll": 1,
+      "ul": 20,
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "readonly": false
+    },
+    {
       "caption": "respiratory quotient",
       "target": "resp_q",
       "type": "number",
@@ -3476,6 +3562,34 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "type": "number",
       "factor": 1,
       "rounding": 3,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "intrauterine pressure (mmHg)",
+      "target": "iup",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "contraction active",
+      "target": "contraction_active",
+      "type": "boolean",
+      "build_prop": false,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "Montevideo units",
+      "target": "montevideo_units",
+      "type": "number",
+      "factor": 1,
+      "rounding": 0,
       "build_prop": false,
       "edit_mode": "extra",
       "readonly": true
