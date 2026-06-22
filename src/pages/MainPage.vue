@@ -21,6 +21,7 @@ import ScalerPanel from "@/components/controls/ScalerPanel.vue";
 import VentilatorPanel from "@/components/controls/VentilatorPanel.vue";
 import EclsPanel from "@/components/controls/EclsPanel.vue";
 import ResuscitationPanel from "@/components/controls/ResuscitationPanel.vue";
+import PregnancyPanel from "@/components/controls/PregnancyPanel.vue";
 import EventSchedulerPanel from "@/components/controls/EventSchedulerPanel.vue";
 import SaveStatePanel from "@/components/controls/SaveStatePanel.vue";
 import AdminUsersButton from "@/components/controls/AdminUsersButton.vue";
@@ -217,6 +218,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             <Tab value="resuscitation" v-tooltip.top="'Resuscitation'" aria-label="Resuscitation">
               <i class="pi pi-heart"></i>
             </Tab>
+            <Tab value="pregnancy" v-tooltip.top="'Pregnancy / Labor'" aria-label="Pregnancy / Labor">
+              <i class="pi pi-venus"></i>
+            </Tab>
             <Tab value="scaler" v-tooltip.top="'Scaler'" aria-label="Scaler">
               <i class="pi pi-expand"></i>
             </Tab>
@@ -243,6 +247,11 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
             <TabPanel value="resuscitation">
               <div class="flex flex-col gap-3">
                 <ResuscitationPanel />
+              </div>
+            </TabPanel>
+            <TabPanel value="pregnancy">
+              <div class="flex flex-col gap-3">
+                <PregnancyPanel />
               </div>
             </TabPanel>
             <TabPanel value="scaler">
