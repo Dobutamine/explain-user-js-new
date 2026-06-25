@@ -2757,6 +2757,120 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "type": "factor"
     },
     {
+      "caption": "enable dynamic valve model",
+      "target": "enable_dynamics",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic"
+    },
+    {
+      "caption": "orifice flow coefficient (CQ)",
+      "target": "cq",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "caption": "max opening angle (deg)",
+      "target": "theta_max",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "caption": "min opening angle (deg)",
+      "target": "theta_min",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "caption": "pressure coefficient (Kp)",
+      "target": "kp",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "caption": "friction coefficient (Kf)",
+      "target": "kf",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "caption": "blood-motion coefficient (Kb)",
+      "target": "kb",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "caption": "vortex coefficient (Kv)",
+      "target": "kv",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "caption": "integration sub-steps",
+      "target": "n_substeps",
+      "type": "number",
+      "build_prop": true,
+      "edit_mode": "advanced",
+      "delta": 1,
+      "factor": 1,
+      "rounding": 0
+    },
+    {
+      "caption": "orifice flow coefficient factor",
+      "target": "cq_factor_ps",
+      "type": "factor"
+    },
+    {
+      "caption": "leaflet angle (deg)",
+      "target": "theta",
+      "type": "number",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": true,
+      "delta": 1,
+      "factor": 57.29577951308232,
+      "rounding": 0
+    },
+    {
+      "caption": "opening area ratio",
+      "target": "ar",
+      "type": "number",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": true,
+      "delta": 1,
+      "factor": 1,
+      "rounding": 2
+    },
+    {
       "target": "is_externally_managed",
       "type": "boolean",
       "build_prop": false,
