@@ -188,7 +188,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
         class="h-12 w-auto shrink-0"
       />
       <span v-if="loadedName" class="min-w-0 truncate text-sm" v-tooltip.bottom="'Loaded state'">
-        <span class="opacity-50">Current state:</span>
+        <span class="opacity-50">Active state:</span>
         <span class="ml-1 font-medium text-surface-100">{{ loadedName }}</span>
       </span>
       <div class="ml-auto flex items-center gap-3">
