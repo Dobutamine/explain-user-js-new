@@ -112,7 +112,11 @@ onMounted(async () => {
 // at startup (overrides the cloud default). Click again to clear it.
 function toggleDefaultLocal() {
   if (!current.value) return;
-  statesStore.setDefaultLocal(auth.user?.defaultLocalState === current.value ? null : current.value);
+  const next = auth.user?.defaultLocalState === current.value ? null : current.value;
+  // In dev the developer account isn't backed by MongoDB — persist the choice to
+  // localStorage instead of POSTing to /api/states/set-default-local.
+  if (import.meta.env.DEV) auth.setDefaultLocalState(next);
+  else statesStore.setDefaultLocal(next);
 }
 
 // delete a model definition file from public/model_definitions (dev endpoint)
