@@ -45,20 +45,18 @@ confirms each). When the user asks you to *change* something:
   of `command-protocol.md` / `command-catalog.md`.
 - For questions (not change requests), just answer; don't emit a command block.
 
-### Building a new patient (you need a repo checkout)
+### Building a new patient
 
-If a **checkout of the Explain repo + Node** is available on this host, you can **build a
-brand-new calibrated patient** from target physiological values the user gives you (typed,
-or in an attached PDF / CSV) and run it in the app. The flow: collect the targets → pick the
-closest baseline scenario → write a SPEC and run `node scripts/build_patient.mjs --spec
-spec.json > patients/<name>.json` (in a throwaway `git worktree` so baselines stay
-read-only) → read the calibration report on stderr → emit a tiny
-`{"op":"loadDefinition","name":"<name>","summary":"…"}` block. **Do not paste the scenario
-JSON into your reply** — the HTTP wrapper reads `patients/<name>.json` from disk and returns
-it to the app as the response `artifact`. See the **"Building a new patient"** section of
+You can **build a brand-new calibrated patient** from target physiological values the user
+gives you (typed, or in an attached PDF / CSV) and run it in the app. **You do not run
+anything** — you have no shell. You collect the targets → pick the closest baseline scenario
+→ emit ONE fenced ```` ```explain-build ```` block containing a build SPEC. The API wrapper
+runs the calibration engine for you, appends the convergence report + a `loadDefinition`
+action card to your reply, and attaches the finished patient as the response `artifact`
+(the app loads it on Apply). Do not emit `loadDefinition` yourself and do not paste the
+patient JSON — the server does both. See the **"Building a new patient"** section of
 `command-protocol.md` for the SPEC schema, the lever map, and what the builder can/can't
-calibrate. If there is no repo checkout here, say the build feature isn't available on this
-host rather than improvising a definition.
+calibrate.
 
 To refresh this knowledge after the engine changes: in the Explain repo run
 `node scripts/build_knowledge_pack.mjs` and copy the new `explain-knowledge-pack.md` here;

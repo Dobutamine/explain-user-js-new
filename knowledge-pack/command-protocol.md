@@ -41,7 +41,10 @@ One JSON object per block. Fields by `op`:
 | `start` | — | start the realtime simulation loop |
 | `stop` | — | stop the realtime simulation loop |
 | `diagram` | `action`, + per-action fields | edit the diagram (see below) |
-| `loadDefinition` | `name`, `summary` | load+run a **brand-new calibrated patient** you built (see "Building a new patient") |
+
+To **build a brand-new calibrated patient** you instead emit a separate `explain-build`
+block (not an `explain-command`) — see "Building a new patient" below. You never emit
+`loadDefinition` yourself; the server generates it after it runs the build.
 
 `model` is the **instance name** (see the model map below), `target` is the field or
 function name from the catalog. `reason` is optional but always include it — a short
@@ -108,16 +111,15 @@ Sure — I'll add a kidney compartment and wire it to the aorta.
 ```
 ````
 
-## Building a new patient (`op:"loadDefinition"`)
+## Building a new patient (`explain-build`)
 
 Beyond tweaking the running patient, you can **build a brand-new, calibrated patient
 from target physiological values** the user gives you (typed, or in an attached PDF /
-CSV) and run it immediately. This replaces the whole model, so it's **Full scope only**
-and always confirm-before-apply.
+CSV) and run it immediately.
 
-**You can only do this if you are the Agent-SDK bot with a checkout of the Explain
-repo + Node** (the bot host). The build runs the engine headless; a knowledge-only
-fallback bot cannot do it — in that case, tell the user the feature needs the build bot.
+**You do NOT run anything yourself.** You produce a build **SPEC**; the server (the API
+wrapper on the bot host) runs the calibration engine for you, then returns the finished
+patient to the app. You have no shell — do not try to run scripts or read/write files.
 
 ### Workflow
 
@@ -131,25 +133,22 @@ fallback bot cannot do it — in that case, tell the user the feature needs the 
    `adult_female`, `term_fetus`, a CDH/CHD/PDA variant, etc. (see the scenario list in the
    knowledge pack / `public/model_definitions/index.json`).
 
-3. **Write a SPEC and run the builder** in your checkout (ideally a throwaway git worktree
-   so baselines stay read-only):
+3. **Emit ONE fenced `explain-build` block** containing the SPEC (schema below) — nothing
+   else. Keep your normal prose too (say what you're building). Example:
 
-   ```bash
-   echo '{"baseline":"term_neonate","name":"custom_preterm","targets":{"weight":1.2,"gestational_age":28,"map":33,"hr":165,"spo2":90,"pco2":52,"be":-5}}' \
-     | node scripts/build_patient.mjs > patients/custom_preterm.json 2> build.log
+   ````
+   I'll build that 1.2 kg, 28-week preterm and calibrate it to your targets.
+
+   ```explain-build
+   {"baseline":"term_neonate","name":"custom_preterm","summary":"1.2 kg / 28 wk preterm — MAP 33, SpO2 90, pCO2 52, BE −5","targets":{"weight":1.2,"gestational_age":28,"map":33,"hr":165,"spo2":90,"pco2":52,"be":-5}}
    ```
+   ````
 
-   `stdout` is the full runnable scenario JSON; `stderr` (`build.log`) is the calibration
-   trace + a final residual report (`CONVERGED` / `INCOMPLETE`, with per-target Δ). **Read
-   the report** — tell the user which targets were met and surface any that weren't.
-
-4. **Emit a tiny `loadDefinition`** naming the patient. **Do NOT paste the scenario JSON
-   into your reply** — it's ~300 KB; the bot host reads the file from disk and attaches it
-   to the response as `artifact`, and the app loads it via that. Your block stays small:
-
-   ```explain-command
-   {"op":"loadDefinition","name":"custom_preterm","summary":"1.2 kg / 28 wk preterm — MAP 33, SpO2 90, pCO2 52, BE −5","reason":"build and run the requested preterm"}
-   ```
+   The server then runs the builder, and **automatically** appends the calibration report
+   (`CONVERGED` / `INCOMPLETE`, per-target Δ) and a `loadDefinition` action card to your
+   reply, and attaches the ~300 KB patient as the response `artifact` (the app loads it on
+   Apply). **Do not emit a `loadDefinition` yourself, and do not paste the patient JSON** —
+   the server handles both. One `explain-build` block per reply.
 
 ### SPEC schema
 
@@ -159,7 +158,9 @@ fallback bot cannot do it — in that case, tell the user the feature needs the 
   "name": "custom_patient",            // output patient name
   "targets": {                          // all optional; only listed vitals are calibrated
     "weight": 1.2, "gestational_age": 28, "height": 0.355, "age": 0, // structural
-    "hb": 9.5, "temp": 36.8, "pda": 0.4,                             // structural
+    "hb": 9.5,            // hemoglobin in mmol/L (the model's unit)
+    "hb_gdl": 15.3,       // OR hemoglobin in g/dL — the builder converts to mmol/L (use ONE of hb / hb_gdl)
+    "temp": 36.8, "pda": 0.4,                                        // structural
     "hr": 165, "map": 33, "cvp": 4, "pap_m": 28,                     // iterated (mmHg, bpm)
     "spo2": 90, "po2": 55, "pco2": 52, "ph": 7.28, "be": -5, "co": 0.3 // iterated
   },
@@ -170,7 +171,10 @@ fallback bot cannot do it — in that case, tell the user the feature needs the 
 ```
 
 Units match the monitor/ABG the app shows: pressures mmHg, SpO2 %, temp °C, pH unitless,
-pCO2/PO2 mmHg, BE mmol/L, weight kg, height m, CO L/min.
+pCO2/PO2 mmHg, BE mmol/L, weight kg, height m, CO L/min. **Hemoglobin is mmol/L** (the
+model's unit, as used in NL labs) — put a mmol/L value in `hb`, or, if the user/datasheet
+gives Hb in **g/dL**, put it in `hb_gdl` and the builder converts it. Never pass a g/dL
+number as `hb`.
 
 ### What the builder calibrates (and limits)
 
