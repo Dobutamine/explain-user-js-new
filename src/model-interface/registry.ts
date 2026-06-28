@@ -45,7 +45,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "caption": "drug",
           "type": "list",
           "custom_options": true,
-          "choices": ["adrenaline", "noradrenaline"]
+          "choices": ["adrenaline", "noradrenaline", "pge1"]
         },
         {
           "target": "dose",
@@ -73,7 +73,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "caption": "drug",
           "type": "list",
           "custom_options": true,
-          "choices": ["adrenaline", "noradrenaline"]
+          "choices": ["adrenaline", "noradrenaline", "pge1"]
         },
         {
           "target": "rate",
@@ -141,6 +141,15 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": true
     },
     {
+      "target": "pda_drug_factor",
+      "type": "number",
+      "caption": "applied ductal patency factor (PGE1)",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
       "target": "set_drug_param",
       "type": "function",
       "caption": "set PK/PD parameter",
@@ -153,7 +162,7 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
           "caption": "drug",
           "type": "list",
           "custom_options": true,
-          "choices": ["adrenaline", "noradrenaline"]
+          "choices": ["adrenaline", "noradrenaline", "pge1"]
         },
         {
           "target": "param",
@@ -165,7 +174,8 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
             "clearance.global",
             "hr_ec50", "hr_emax", "hr_hill",
             "cont_ec50", "cont_emax", "cont_hill",
-            "svr_ec50", "svr_emax", "svr_hill"
+            "svr_ec50", "svr_emax", "svr_hill",
+            "pda_ec50", "pda_emax", "pda_hill"
           ]
         },
         {
