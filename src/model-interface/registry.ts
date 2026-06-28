@@ -4709,6 +4709,127 @@ export const MODEL_INTERFACES: Record<string, InterfaceField[]> = {
       "readonly": true
     }
   ],
+  "Brain": [
+    {
+      "target": "description",
+      "type": "string",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": true,
+      "caption": "description"
+    },
+    {
+      "target": "is_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "all",
+      "readonly": false,
+      "caption": "enabled"
+    },
+    {
+      "caption": "brain controller running",
+      "target": "brain_running",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "autoregulation enabled",
+      "target": "autoregulation_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "autoregulation gain (1=intact, 0=pressure-passive)",
+      "target": "autoregulation_gain",
+      "type": "number",
+      "delta": 0.1,
+      "factor": 1,
+      "rounding": 2,
+      "ll": 0,
+      "ul": 1,
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "ICP coupling enabled",
+      "target": "icp_enabled",
+      "type": "boolean",
+      "build_prop": true,
+      "edit_mode": "basic",
+      "readonly": false
+    },
+    {
+      "caption": "set intracranial oedema (mL)",
+      "target": "set_edema",
+      "type": "function",
+      "build_prop": false,
+      "edit_mode": "basic",
+      "readonly": false,
+      "args": [
+        {
+          "target": "volume_ml",
+          "caption": "oedema / mass volume (mL)",
+          "type": "number",
+          "factor": 1,
+          "default": 10,
+          "delta": 1,
+          "rounding": 1,
+          "ll": 0,
+          "ul": 40
+        }
+      ]
+    },
+    {
+      "caption": "cerebral blood flow (L/min)",
+      "target": "cbf",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "cerebral perfusion pressure (mmHg)",
+      "target": "cpp",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "intracranial pressure (mmHg)",
+      "target": "icp",
+      "type": "number",
+      "factor": 1,
+      "rounding": 1,
+      "edit_mode": "basic",
+      "readonly": true
+    },
+    {
+      "caption": "brain tissue O2 (mmol/L)",
+      "target": "brain_to2",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    },
+    {
+      "caption": "applied arteriole resistance factor",
+      "target": "autoreg_factor",
+      "type": "number",
+      "factor": 1,
+      "rounding": 3,
+      "edit_mode": "extra",
+      "readonly": true
+    }
+  ],
   "Mob": [
     {
       "target": "model_type",
