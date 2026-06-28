@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-This directory is a **slice of a larger Quasar/Vue web app** — specifically the `src/explain` physiological simulation engine (`explain/`) plus a set of scenario definitions (`model_definitions/`). There is no `package.json`, no build tooling, and no `node_modules` here. The engine is plain ES modules that run inside a **Web Worker** in the host app.
+This directory is a **standalone Vue 3 + Vite + TypeScript web app** built around the `explain/` physiological simulation engine (plain ES modules that run inside a **Web Worker**) plus a set of scenario definitions (`model_definitions/`). The app was migrated off Quasar; it now uses Vue 3 + Vite + TypeScript + PrimeVue + Tailwind, while the engine in `explain/` is kept framework-agnostic. The repo has its own `package.json`, `vite.config.ts`, and `node_modules`.
 
-Because the host app isn't in this directory, you **cannot `npm run dev` / build / lint / test from here**. To actually run the model you need the parent Quasar app, which bootstraps the engine via `src/boot/explain.js` and serves definitions from `public/model_definitions`. Within this directory, work is read/edit-level: modifying engine classes, model definitions, and docs.
+Run it from this directory: `npm run dev` (Vite dev server), `npm run build` (`vue-tsc --noEmit && vite build`), `npm run typecheck`, `npm run preview`. The Vue layer bootstraps the engine through `src/composables/useExplain.ts` — a singleton that does `new Model()` (imported as `@explain/Model`, an alias to `./explain/` set in `vite.config.ts`/`tsconfig.json`). `Model.js` spawns the worker via `new Worker(new URL("./ModelEngine.js", import.meta.url), { type: "module" })`. Scenario definitions are served from `public/model_definitions/`.
 
 ## Architecture
 
@@ -76,4 +76,4 @@ Some component models build sub-models inside `init_model` via the `this.compone
 
 ## Docs
 
-`explain/docs/*.md` and `explain/papers/` contain the physiological derivations for several models (`BloodCapacitance`, `BloodVessel`, `HeartChamber`, `Pda`, …). Consult these before changing the math in those classes. `explain/README.md` has a student-onboarding walkthrough and a console-usage cheat sheet (`window.explain` in the host app).
+`explain/docs/*.md` and `explain/papers/` contain the physiological derivations for several models (`BloodCapacitance`, `BloodVessel`, `HeartChamber`, `Pda`, …). Consult these before changing the math in those classes. `explain/README.md` has a student-onboarding walkthrough and a usage cheat sheet (drive the engine via the `model` returned by `useExplain()`).
