@@ -121,7 +121,56 @@ State `theta`/`dtheta`/`ar` initialiseert de constructor; niet nodig in JSON. De
 - **In-place togglen**: omdat het dynamische blok overal voorgevuld staat met `enable_dynamics:false`, zet je per klep de flag aan/uit in `term_neonate_birgit` zelf — geen tweede bestand nodig.
 - **A/B-vergelijking**: gebruik het **ongewijzigde `term_neonate`-scenario als lineaire baseline** naast `term_neonate_birgit` met (sommige) kleppen dynamisch. Er hoeft dus **géén aparte kopie of `index.json`-entry** gemaakt te worden — alle wijzigingen gaan in `term_neonate_birgit`.
 
-**Tuning**: de `cq`/`kv` zijn volwassen paper-waarden → her-tunen voor de neonaat (risico #3). Methode: kies `cq` per klep zo dat de gemiddelde/piek-klepflow in dynamische modus de waarde van de lineaire baseline benadert. Bij de tricuspidalis verdeelt de instroom over twee paden → verdeel `cq` navenant (bv. splitsen) zodat de gecombineerde instroom klopt.
+**Tuning**: de `cq`/`kv` zijn volwassen paper-waarden → her-tunen voor de neonaat (risico #3). Hieronder twee methodes om `cq` te bepalen: **methode 1** (flow-matching tegen de lineaire `r_for`) en **methode 2** (uit de effectieve klepopening via Bernoulli). **Methode 2 is toegepast** op de huidige JSON-waarden.
+
+#### Methode 1 (referentie) — flow-matching tegen de lineaire `r_for`
+Laat het dynamische model bij **volledig open klep (AR≈1)** dezelfde flow passeren als de lineaire klep met `r_for=55`.
+
+- Lineair (L/s): `Q_lin = ΔP / r_for`
+- Dynamisch, AR=1 (ml/s → `/1000` voor L/s): `Q_dyn = CQ · √ΔP / 1000`
+
+Gelijkstellen bij een representatieve open-klep-gradiënt `ΔP_rep` en oplossen naar CQ:
+```
+CQ · √ΔP_rep / 1000 = ΔP_rep / r_for
+CQ · √ΔP_rep        = 1000 · ΔP_rep / r_for
+CQ                  = 1000 · ΔP_rep / (r_for · √ΔP_rep)
+CQ                  = 1000 · √ΔP_rep / r_for        (want ΔP_rep / √ΔP_rep = √ΔP_rep)
+CQ                  = (1000 / 55) · √ΔP_rep ≈ 18,2 · √ΔP_rep
+```
+Eenheidscontrole: `(ml/L · √mmHg) / (mmHg·s/L) = ml/(s·√mmHg)` ✓ — precies de eenheid van CQ.
+Let op: de match is **exact bij de gekozen `ΔP_rep`**; lineair is ∝ΔP, orifice ∝√ΔP, dus daarbuiten lopen ze uiteen. `ΔP_rep` = de typische gradiënt waarbij de klep openstaat (semilunair ~5, AV-kleppen ~2 mmHg).
+
+`CQ = 18,2 · √ΔP_rep`:
+
+| ΔP_rep (mmHg) | 1 | 2 | 3 | 5 | 8 | 10 |
+|---|---|---|---|---|---|---|
+| CQ | 18 | 26 | 32 | 41 | 51 | 57 |
+
+De per-klep referentiewaarden (bij ΔP_rep semilunair ~5, AV ~2 mmHg) komen dan uit op ~40 (aorta), ~35 (pulmonalis) en ~26 (AV-kleppen). Dit is de **referentiemethode**; de toegepaste waarden komen uit methode 2 hieronder.
+
+#### Methode 2 (toegepast) — CQ uit de effectieve klepopening (Bernoulli)
+`CQ` is fysisch de orifice-constante uit formule 6 + Bernoulli. Bij AR=1 is `Q = A·v`, met `v` uit de vereenvoudigde klinische Bernoulli `ΔP[mmHg] = 4·v²` → `v = ½·√ΔP` (m/s). Met `A` in cm² en `Q` in ml/s (v van m/s→cm/s, ×100):
+```
+Q[ml/s] = 50 · A[cm²] · √ΔP     →     CQ = 50 · A_EOA[cm²]     (met discharge-coëff.: CQ = 50·C_d·EOA)
+```
+- De **50** = ½ (uit Bernoulli) × 100 (m/s→cm/s); de **4** in `4v²` = ½·ρ / 133,3 (ρ_bloed≈1060 kg/m³, Pa→mmHg).
+- Zo koppel je `CQ` aan een **meetbare klepdiameter** i.p.v. aan de kunstmatige `r_for`.
+
+Neonatale annulus­diameters (typische term-waarden — pas aan naar je eigen referentie/z-scores), `A = π·(d/2)²`, `C_d≈1`:
+
+| Klep | name | d (mm) | A (cm²) | split | **CQ = 50·A** |
+|---|---|---|---|---|---|
+| aorta | `LV_AA` | 6,5 | 0,332 | 1 | **17** |
+| pulmonalis | `RV_PA` | 8,0 | 0,503 | 1 | **25** |
+| aorta (TGA) | `LV_PA` | 6,5 | 0,332 | 1 | **17** |
+| pulm. (TGA) | `RV_AA` | 8,0 | 0,503 | 1 | **25** |
+| mitralis | `LA_LV` | 11,0 | 0,950 | 1 | **48** |
+| tricuspidalis | `RAIVCI_RV` | 12,0 | 1,131 | ÷2 | **28** |
+| tricuspidalis | `RASVC_RV` | 12,0 | 1,131 | ÷2 | **28** |
+
+- **Tricuspidalis**: één klep-orifice (d≈12 mm) verdeeld over de twee parallelle instroompaden → elk pad `50·A/2 ≈ 28` (samen = de volledige tricuspidalis). Dit vervangt de eerdere flow-match-aanname ("elk pad zijn eigen `r_for`").
+- Een realistische `C_d` (~0,8) schaalt alle waarden ~20% omlaag; hanteer dat bij verder tunen.
+- **Toegepast in `term_neonate_birgit.json` (2026-07-01)**: bovenstaande CQ-waarden (17 / 25 / 48 / 28). Startpunten — verfijn per klep tegen de lineaire baseline.
 
 **Let op (welk JSON-bestand bewerken)**: `Model.load` haalt het scenario op via `/model_definitions/<name>.json` (`explain/Model.js:65`), en Quasar serveert dat vanaf `public/`. Bewerk dus **`public/model_definitions/term_neonate_birgit.json`** — dat is de bron én de enige plek waar dit scenario staat. `dist/model_definitions/` is build-output (gegenereerd door `quasar build`; bevat dit scenario niet eens) → niet handmatig bewerken, wordt bij een rebuild overschreven. Er is in deze repo géén aparte top-level `model_definitions/`-kopie om mee te synchroniseren.
 

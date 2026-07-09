@@ -119,6 +119,7 @@ export class HeartValve extends Resistor {
       if (q >= 0.0) {
         d2 -= this.kv * q * Math.sin(2.0 * this.theta);
       }
+31804
 
       // semi-implicit (symplectic) Euler integration
       this.dtheta += d2 * dt;
