@@ -37,7 +37,10 @@ the target mean arterial pressure so the model's own control loops defend rather
 calibrated operating point. The same calibrator serves both offline construction of a new,
 fully calibrated patient and live in-place retuning of a running simulation. We show that the
 method converges to within tolerance for representative neonatal and preterm targets, and we discuss
-the conditions under which convergence of strongly coupled targets is and is not guaranteed. By
+the conditions under which convergence of strongly coupled targets is and is not guaranteed. A formal,
+variance-based sensitivity analysis confirms that the one-lever design is well-posed for the pressure
+targets, identifies where target coupling or the operating point weakens it, and yields a concrete
+refinement of the oxygenation lever. By
 turning an ill-posed high-dimensional inverse problem into a set of well-posed one-dimensional
 root-finds chosen to respect the model's active regulation, and by delegating only interpretation —
 never numerical adjustment — to the language model, the method makes patient-specific instantiation
@@ -316,6 +319,39 @@ numerical fitting, and it is not used to generate the scientific content or text
 authorship is attributed to the AI. This disclosure is provided in the Methods in accordance with the
 journal's policy on the use of AI tools in research methods.
 
+### 2.6 Sensitivity-analysis validation of the one-lever design
+
+The observable-to-controllable pairing of Table 1 is a structural *hypothesis* — that each measured
+target has one dominant, monotone, near-orthogonal lever — and closed-loop calibration is well-posed
+only insofar as that hypothesis holds. We tested it directly with a sensitivity analysis whose input
+space is deliberately the calibration-lever space itself: each analysed parameter is one lever,
+perturbed through the exact non-destructive mechanism and physiological bounds the calibrator uses
+(Eq. 1), so the analysis confirms or refutes the very design it underwrites rather than some proxy of
+it. One steady-state simulation is treated as a deterministic map **y** = g(**θ**) from the levers to
+the 17 routine monitor quantities, reproducible to machine precision. Body **weight is held fixed as
+measured context, not sampled**: the one-lever claim concerns a patient of *known* size, so weight is
+set from the birth weight and scaled allometrically (Section 2.4.4) before any lever is tuned;
+sampling weight instead answers a different, population-variance question in which body size trivially
+dominates every absolute pressure and flow (reported in the Supplement).
+
+The analysis is a staged, screen-then-quantify campaign implemented as a pure-JavaScript, fixed-seed,
+in-repo tool driving the headless engine (`scripts/sa/`), with no external statistical dependency:
+local one-at-a-time (OAT) elasticities and the local Fisher-information matrix for dominance and
+identifiability; Morris elementary-effects screening over an expanded (~25-lever) set; variance-based
+**Sobol′** first-order (Sᵢ) and total (S_Tᵢ) indices — Saltelli sampling, Jansen estimators, bootstrap
+confidence intervals — as the quantitative core; and partial rank correlation (PRCC) as a
+monotonicity-aware, signed cross-check. The pure-JavaScript estimators were validated against the
+Ishigami function, whose Sobol indices are known in closed form, and agreed with the analytic values
+to within 0.011. Each designated lever is then held to a three-part test — **dominance** (largest Sᵢ
+for its target), **interaction-freeness** (Sᵢ ≈ S_Tᵢ, with the correct sign) and **identifiability**
+(an early, well-conditioned pick in a column-pivoted-QR ordering) — and passes only if it satisfies
+all three. Because the sensitivity structure of a nonlinear closed-loop model is itself a function of
+the operating point, the campaign is run at the term-neonate baseline and at contrasting disease
+states (persistent pulmonary hypertension, severe diaphragmatic hernia, transposition, and preterm
+respiratory distress). The full methods, the justification for analysing at the lever altitude rather
+than over the several-hundred class-level parameters, and the complete identifiability results are
+given in the Supplement.
+
 ---
 
 ## 3. Results
@@ -400,8 +436,70 @@ generally, because the levers interact through the shared circulation (systemic 
 both MAP and, through afterload, cardiac output; contractility affects both cardiac output and MAP), a
 pair of strongly coupled targets can make the decoupled per-lever secant oscillate rather than
 converge. These are limitations of infeasible or strongly coupled targets, not of the calibration
-loop itself, and are the subject of the sensitivity-analysis and joint-optimization future work
-(Section 4.4).
+loop itself; the sensitivity analysis of Section 3.3 quantifies exactly which targets are coupled, and
+the joint-optimization extension is discussed in Section 4.4.
+
+### 3.3 The one-lever design is sensitivity-validated
+
+Beyond convergence on a single construction, we asked whether the one-lever-per-target design is
+*structurally* sound. Every reduced-set lever moves its designated target in the direction the
+calibrator assumes (9/9 signs at the term baseline), and the variance-based analysis — run on the ten
+tunable levers with weight held fixed (Saltelli sample, N = 512, 6 144 evaluations, all converged) —
+gives the picture in Table 4 and Figure 1.
+
+**Table 4. One-lever validation matrix** (term neonate, body weight held fixed; Sobol′ N = 512; Jansen
+estimators; PRCC from a Latin-hypercube sample). For each target: the designated lever's first-order
+index Sᵢ (variance explained alone), its total index S_Tᵢ (including interactions), the parameter that
+in fact carries the largest Sᵢ, and the designated lever's partial rank correlation.
+
+| Target | Designated lever | Sᵢ | S_Tᵢ | Largest Sᵢ (parameter) | PRCC | Reading |
+|---|---|---|---|---|---|---|
+| Mean arterial pressure | systemic resistance | **0.56** | 0.71 | systemic resistance | **0.89** | **one-lever** (mild interaction) |
+| Mean pulmonary pressure | pulmonary resistance | **0.67** | 0.89 | pulmonary resistance | **0.91** | **one-lever** (some interaction) |
+| Central venous pressure | venous unstressed vol. | **0.67** | 0.73 | venous unstressed vol. | **−0.80** | **clean one-lever** |
+| Heart rate | HR reference | 0.76 | 1.12† | venous unstressed vol. | **0.84** | dominant, baroreflex-coupled |
+| Base excess | unmeasured anions | **0.67** | 1.08† | unmeasured anions | 0.11 | dominant, interacting |
+| pH | unmeasured anions | **0.55** | 1.09† | unmeasured anions | 0.17 | dominant, interacting |
+| Cardiac output | contractility | 0.17 | 0.14 | venous unstressed vol. | 0.48 | preload/afterload-governed |
+| Arterial PCO₂ | ventilatory drive | 0.00 | 0.13 | unmeasured anions | −0.12 | acid–base-coupled |
+| SpO₂ | O₂ diffusing capacity | 0.00 | 0.03 | unmeasured anions | 0.17 | **diffusion-inert** |
+| Arterial PO₂ | O₂ diffusing capacity | 0.08 | 0.07 | unmeasured anions | 0.20 | **diffusion-inert** |
+
+† S_Tᵢ slightly exceeds 1 for heart rate, base excess and pH — a known finite-N behaviour of the
+Jansen total-index estimator that flags heavy interaction, not a computational error.
+
+Three readings follow, and they matter for how the calibrator should be used. **The three mechanical
+pressure/volume targets pass cleanly.** For mean arterial, mean pulmonary and central venous pressure
+the designated lever is simultaneously the largest first-order index (Sᵢ 0.56, 0.67, 0.67) and the
+dominant, correctly-signed partial correlation (PRCC 0.89, 0.91, −0.80), with modest interaction
+budgets — the operational definition of a good calibration lever. (These are exactly the three targets
+that in a population decomposition read as "dominated by weight"; conditioning on the patient's known
+birth weight reveals the single-lever structure that population variance had masked — the reason
+weight is treated as fixed context.) **Heart rate and acid–base are dominant but coupled:** their
+designated levers carry the largest or near-largest variance, yet near-unity total indices (up to
+1.12) because the baroreflex and the Stewart strong-ion chemistry make them identifiable as coupled
+blocks rather than orthogonal knobs. **Two designated pairings fail, physiologically:** cardiac output
+is preload- and reflex-governed (its largest influence is venous filling, not contractility, because
+the baroreflex buffers the flow response to a contractility change), and oxygenation is
+*diffusion-inert* at the saturated term baseline — the O₂-diffusing-capacity lever explains
+essentially zero SpO₂ variance (Sᵢ ≈ 0.00) because the patient sits on the flat upper plateau of the
+oxyhaemoglobin dissociation curve. The local Fisher-information matrix is well conditioned (condition
+number ≈ 1.4 × 10³), and its column-pivoted-QR ordering ranks the diffusing-capacity lever **last** —
+the least-identifiable direction — in exact agreement with its near-zero influence.
+
+The oxygenation result sharpens at the disease operating points (Figure 2). Wherever the modelled
+patient is actually hypoxaemic — persistent pulmonary hypertension, severe diaphragmatic hernia,
+transposition, and the preterm cohort — the dominant local influence on SpO₂ shifts from the
+acid–base coupling to **pulmonary vascular resistance and shunt geometry**, not diffusing capacity,
+because the modelled desaturation is shunt- and ventilation/perfusion-mediated rather than
+diffusion-limited. *The correct oxygenation lever therefore depends on the mechanism of hypoxaemia*, so
+a single fixed lever-to-target map cannot be right for oxygenation across phenotypes — a concrete,
+actionable finding taken up in Section 4.4. The same structural conclusion was reached independently
+by a lumped-parameter transposition model whose sensitivity analysis found systemic saturation
+governed chiefly by systemic vascular resistance and ductal diameter (Messmore et al. 2026), which
+strengthens confidence that this is a property of the physiology rather than of EXPLAIN's particular
+implementation. (The full variance-based Sobol′/PRCC quantification at the disease points is deferred;
+the operating-point shifts reported here are from the completed local screens.)
 
 ---
 
@@ -414,8 +512,9 @@ automated and disciplined. Its novelty lies less in either layer alone than in t
 in the structure imposed between them. The numerical core is a standard, robust idea — a bank of
 one-dimensional secant root-finders with proportional seeding and box constraints — but the leverage
 comes from the encoded physiology around it: the choice of one dominant, monotone lever per target,
-selected to act with the model's active control loops rather than against them, which converts an
-ill-posed high-dimensional inverse problem into a set of well-posed one-dimensional problems. The
+selected to act with the model's active control loops rather than against them — a choice we validate,
+and delimit, with a formal sensitivity analysis (Section 3.3) — which converts an ill-posed
+high-dimensional inverse problem into a set of well-posed one-dimensional problems. The
 language model contributes exactly the capability the numerical layer lacks — interpreting an
 unstructured clinical description into targets and pathophysiology — while being prevented, by
 construction, from touching the model's equations or state. Because every automated action passes
@@ -443,6 +542,9 @@ any physiological operating point, may leave one or more residuals outside toler
 reports this rather than masking it. The pairing is one lever per target, which is deliberately simple
 and interpretable but cannot exploit the full Jacobian of the coupled system; strongly coupled or
 conflicting specifications would be better served by a joint multi-target optimizer (Section 4.4). The
+sensitivity analysis (Section 3.3) makes this precise, identifying heart rate, cardiac output,
+acid–base and — most sharply — oxygenation as the coupled or operating-point-dependent targets for
+which the single-lever assumption is weakest. The
 seed tables are specific to the neonatal and preterm range for which they were built. And the secant
 slope estimate, like any finite-difference derivative, can be poorly conditioned if two successive
 lever values produce nearly identical measurements, which the bounds and the proportional-seed
@@ -450,11 +552,19 @@ fallback mitigate but do not eliminate.
 
 ### 4.4 Future work
 
-Several extensions follow. A systematic sensitivity analysis would identify, for each target, the
-most informative lever and the operating regions where the one-lever-per-target assumption is
-weakest. Calibration could then be extended from the present decoupled scheme to a joint multi-target
-optimization for the strongly coupled configurations where cross-effects dominate, for example by
-estimating the local multi-input Jacobian rather than per-lever slopes. On the interpretation side,
+Several extensions follow. The sensitivity analysis of Sections 2.6 and 3.3 already identifies, for
+each target, the most informative lever and the operating regions where the one-lever-per-target
+assumption is weakest, and it yields one concrete, actionable design change: because oxygenation is
+governed by pulmonary vascular resistance and shunt geometry rather than by diffusing capacity
+wherever the patient is hypoxaemic, the SpO₂ controller should be re-based on those resistance/shunt
+levers, or made phenotype-aware, rather than relying on a diffusing-capacity lever that has little
+traction at any operating point tested. Building on that analysis, calibration could be extended from
+the present decoupled scheme to a joint multi-target optimization for the strongly coupled
+configurations where cross-effects dominate (for example by estimating the local multi-input Jacobian
+rather than per-lever slopes); the variance-based Sobol′/PRCC quantification could be completed at the
+disease operating points, currently characterized there by the local screen only; and it could be
+extended to the internal gains of the closed-loop controllers, which the lever-level analysis does not
+reach. On the interpretation side,
 the specifications the language model produces could be validated against a broader range of source
 formats and against inter-rater agreement with clinicians. Finally, prospective validation — fitting
 the model to real patients from their bedside data and testing the fit against subsequently observed
@@ -477,6 +587,20 @@ retuning of running simulations.
 
 ---
 
+## Figures
+
+- **Figure 1** (`FigSA_onelever_validation`) — one-lever validation of the calibration design: the
+  designated lever's first-order (Sᵢ) and total (S_Tᵢ) Sobol′ indices per target, term neonate with
+  weight held fixed, coloured by verdict (clean one-lever / dominant-interacting / design fails).
+- **Figure 2** (`FigSA_operating_point_dominance`) — operating-point-dependent dominance: the locally
+  dominant lever for each target across operating points (term, preterm, PPHN, severe CDH, d-TGA,
+  HLHS), showing the oxygenation-lever shift from acid–base coupling to pulmonary vascular resistance /
+  shunt in the hypoxaemic phenotypes.
+
+Both figures are regenerated from the on-disk sensitivity-analysis results by `scripts/sa/plot_sa.mjs`.
+The full sensitivity-analysis methods, the population (weight-sampled) decomposition and the complete
+identifiability results are provided as **Supplementary Information** (`P6_supplement_sensitivity-analysis.md`).
+
 ## References
 
 See `thesis/_references.md`. Core citations for this paper: Anthropic Claude (large language model)
@@ -485,3 +609,13 @@ the cardiovascular and respiratory companion papers for the model and lever defi
 already-drafted software/AI citations of `thesis/circ-paper-additions.md` Block G, and confirm the
 exact Claude model/version and access date, and the AI-disclosure placement, against the journal's
 current policy before submission.
+
+Sensitivity-analysis references (Sections 2.6, 3.3 and the Supplement): Morris (Technometrics 1991);
+Campolongo, Cariboni & Saltelli (Environ Model Softw 2007); Sobol′ (Math Comput Simul 2001); Saltelli
+et al. (*Global Sensitivity Analysis: The Primer*, 2008; Comput Phys Commun 2010); Jansen (Comput Phys
+Commun 1999); Marino, Hogue, Ray & Kirschner (J Theor Biol 2008); Raue et al. (Bioinformatics 2009);
+Gutenkunst et al. (PLoS Comput Biol 2007); Transtrum et al. (J Chem Phys 2015); Eck et al. (Int J Numer
+Method Biomed Eng 2016); and **Messmore, DeCampli & Kassab** (Cardiovasc Eng Technol 2026,
+doi:10.1007/s13239-026-00839-9) — the neonatal transposition sensitivity-analysis precedent that
+independently reproduces the oxygenation result (SpO₂ most sensitive to systemic resistance and ductal
+diameter). Verify Messmore's final citation details against PubMed/DOI at assembly.

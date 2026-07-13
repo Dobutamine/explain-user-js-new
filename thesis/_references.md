@@ -197,6 +197,24 @@ temperature and 2,3-DPG. Verified provenance:
 
 ---
 
+## Sensitivity analysis & identifiability (Paper 6 — `scripts/sa/`, §2.6/§3.3 + Supplement)
+
+*Methods refs for the sensitivity-analysis validation of the one-lever calibration design. All are canonical methods sources except Messmore 2026 (the neonatal precedent — verify DOI/PMID at assembly).*
+
+- **Morris MD.** Factorial sampling plans for preliminary computational experiments. *Technometrics* 1991;33:161–174. — elementary-effects screening (Tier 1).
+- **Campolongo F, Cariboni J, Saltelli A.** An effective screening design for sensitivity analysis of large models. *Environ Model Softw* 2007;22:1509–1518. — Morris design refinement.
+- **Sobol′ IM.** Global sensitivity indices for nonlinear mathematical models and their Monte Carlo estimates. *Math Comput Simul* 2001;55:271–280. — variance-based indices (Tier 2).
+- **Saltelli A, et al.** *Global Sensitivity Analysis: The Primer.* Wiley, 2008; and Variance based sensitivity analysis of model output. *Comput Phys Commun* 2010;181:259–270. — Saltelli sampling.
+- **Jansen MJW.** Analysis of variance designs for model output. *Comput Phys Commun* 1999;117:35–43. — the first/total-order estimators used.
+- **Marino S, Hogue IB, Ray CJ, Kirschner DE.** A methodology for performing global uncertainty and sensitivity analysis in systems biology. *J Theor Biol* 2008;254:178–196. — SA-for-biological-models expectation; PRCC.
+- **Raue A, et al.** Structural and practical identifiability analysis of partially observed dynamical models by exploiting the profile likelihood. *Bioinformatics* 2009;25:1923–1929. — identifiability.
+- **Gutenkunst RN, et al.** Universally sloppy parameter sensitivities in systems biology models. *PLoS Comput Biol* 2007;3:e189. — "sloppiness."
+- **Transtrum MK, et al.** Perspective: Sloppiness and emergent theories in physics, biology, and beyond. *J Chem Phys* 2015;143:010901. — "sloppiness" perspective.
+- **Eck VG, et al.** A guide to uncertainty quantification and sensitivity analysis for cardiovascular applications. *Int J Numer Method Biomed Eng* 2016;32:e02755. — SA guide for cardiovascular models.
+- **Messmore M, DeCampli W, Kassab A.** Computational model for predicting optimal clinical intervention in pre-operative neonates with transposition of the great arteries. *Cardiovasc Eng Technol* 2026. doi:10.1007/s13239-026-00839-9. — **neonatal LPM SA precedent**; independently finds SpO₂ most sensitive to SVR and PDA diameter (corroborates the operating-point oxygenation finding). *(Verify final citation/PMID at assembly.)*
+
+---
+
 ## Notes
 
 - **Single-source vs pick-one topics.** For most Paper 3/4 topics two sources are listed

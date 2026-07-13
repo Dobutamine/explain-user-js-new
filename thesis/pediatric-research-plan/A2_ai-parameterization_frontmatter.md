@@ -22,11 +22,11 @@
 
 **Methods:** We describe an AI-assisted, closed-loop parameterization pipeline for a real-time whole-body neonatal simulator. A large language model interprets the available clinical description into a validated, allowlisted specification (baseline, target values, pathophysiology). A deterministic calibrator then fits the model by assigning one physiologically interpretable lever to each measured target and driving each to a clinician-meaningful tolerance with a proportional-seed/secant root-finder, after allometric and gestational-age seeding and baroreflex set-point alignment so the model's own control loops defend the fit. The language model performs no numerical fitting.
 
-**Results:** For a 28-week, 1.0-kg preterm construction, five targets (heart rate, mean arterial pressure, cardiac output, SpO₂, PCO₂) converged within tolerance in two iterations, with untargeted vitals remaining within preterm reference ranges; the same calibrator retuned a running simulation in place in three iterations.
+**Results:** For a 28-week, 1.0-kg preterm construction, five targets (heart rate, mean arterial pressure, cardiac output, SpO₂, PCO₂) converged within tolerance in two iterations, with untargeted vitals remaining within preterm reference ranges; the same calibrator retuned a running simulation in place in three iterations. A variance-based sensitivity analysis (Sobol′/PRCC, estimator-validated) validates the one-lever design for the pressure targets and identifies where target coupling or the operating point weakens it.
 
 **Conclusion:** Separating interpretation from fitting, and bounding every automated adjustment, makes patient-specific instantiation of a mechanistic neonatal model rapid, auditable and reproducible.
 
-*(~195 words.)*
+*(~215 words with the sensitivity-analysis clause — trim to ≤200 at final assembly, e.g. by shortening Background.)*
 
 ---
 
@@ -40,4 +40,4 @@ A large language model can interpret bedside clinical data into a validated, bou
 
 ## Positioning note (cite in Intro + Discussion)
 
-Differentiate explicitly from the recent PR in-silico neonatal models — Munneke, Lumens & Delhaas 2021 (DOI 10.1038/s41390-021-01401-0) and van Willigen … van de Vosse 2026 (DOI 10.1038/s41390-025-04565-1), the latter run **"without patient-specific parameters"** — and from the Karger "Newborn Cardiovascular Digital Twins" identifiability work. This paper's contribution is precisely the automated, reproducible *patient-specific* fitting those lack. Tie the one-lever-per-target claim to the sensitivity-analysis evidence (`thesis-ch6-sensitivity-analysis.md`).
+Differentiate explicitly from the recent PR in-silico neonatal models — Munneke, Lumens & Delhaas 2021 (DOI 10.1038/s41390-021-01401-0) and van Willigen … van de Vosse 2026 (DOI 10.1038/s41390-025-04565-1), the latter run **"without patient-specific parameters"** — and from the Karger "Newborn Cardiovascular Digital Twins" identifiability work. This paper's contribution is precisely the automated, reproducible *patient-specific* fitting those lack. ✅ **DONE:** the one-lever-per-target claim is now tied to its sensitivity-analysis validation — incorporated into P6 §2.6 (methods) and §3.3 (results, with the one-lever validation matrix + two figures), the full treatment carried as Supplementary Information (`P6_supplement_sensitivity-analysis.md`). Note this is itself a differentiator: none of Munneke/van Willigen/May report an identifiability or sensitivity analysis of their parameterization, and the oxygenation finding is independently corroborated by Messmore et al. 2026 (neonatal-transposition SA).

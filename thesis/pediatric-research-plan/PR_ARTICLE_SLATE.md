@@ -38,7 +38,7 @@ Outside PR: **May et al., "Newborn cardiovascular digital twins: personalised id
 | **P3b** | Homeostatic regulation (renal, endocrine/RAAS-ADH, thermal, glucose, pharmacology) | subsystem coverage | B3 | 2 | model |
 | **P4** | Mechanical support devices — *reframed around a physiological question* (e.g. ventilation-induced haemodynamics, ECMO gas exchange) | subsystem coverage | B5 | 2 | model |
 | **P5** | **Integrated model + virtual-patient-library flagship** | Whole-body integration; validation showcase **is** the AI-parameterization demonstrated across the library | A1 | 2 | model |
-| **P6** | **AI-parameterization pipeline** | **Headline method** — full treatment | A2 ≡ B4 | 3 | method |
+| **P6** | **AI-parameterization pipeline** (incl. the variance-based **sensitivity-analysis validation** of the one-lever design + Supplement) | **Headline method** — full treatment | A2 ≡ B4 | 3 | method |
 | **P7** | Duct-/FO-dependent CHD in silico (12-lesion family) | clinical application; **lesion cases parameterized via the AI pipeline** | A3 | 3 | application |
 | **P8** | **Review** — explanatory, AI-parameterized whole-body simulation in neonatology | concept anchor / synthesis | A0 | 3 | synthesis |
 
@@ -100,7 +100,7 @@ Before consolidation, the programme was framed as two candidate slates. Retained
 
 **Slate A (tight flagship):**
 - **A1** — Integrated cardiorespiratory model, validated across virtual newborns (circ master + `thesis-ch7`). → **P5**.
-- **A2** — AI-parameterization pipeline (`ai-parameterization-paper.md` + `thesis-ch6-sensitivity-analysis.md`). → **P6**.
+- **A2** — AI-parameterization pipeline (`ai-parameterization-paper.md`). → **P6**. *(2026-07-13: the sensitivity analysis, formerly a bundled source `thesis-ch6-sensitivity-analysis.md`, is now **incorporated into P6** — Methods §2.6 + Results §3.3 with the one-lever validation matrix and two figures (`FigSA_*`), full treatment as Supplement `P6_supplement_sensitivity-analysis.md`. The SA doubles as a **field differentiator**: none of Munneke 2021 / van Willigen 2026 / May 2025 report an identifiability or sensitivity analysis of their parameterization, and the oxygenation finding is independently reproduced by Messmore et al. 2026.)*
 - **A3** — Duct-/FO-dependent CHD in silico (`thesis-ch7` §7.6 + `chd_duct_fo_dependent.md`). → **P7**.
 
 **Slate B (full subsystem map):**
