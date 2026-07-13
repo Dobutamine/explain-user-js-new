@@ -8,3 +8,7 @@ dist
 .env.*
 !.env.example
 !.env.local.example
+
+# macOS Finder + Obsidian editor cruft
+.DS_Store
+.obsidian/
